@@ -17,7 +17,24 @@ export function AuthProvider({ children }) {
         sessionStorage.getItem(SESSION_KEY) ||
         localStorage.getItem(LEGACY_SESSION_KEY) ||
         sessionStorage.getItem(LEGACY_SESSION_KEY);
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      if (parsed) {
+        const uId =
+          parsed.userId ||
+          parsed.user?.userId ||
+          parsed.user?.id ||
+          parsed.user?.ad_user_id ||
+          0;
+        if (uId > 0) {
+          parsed.userId = uId;
+          if (parsed.user) {
+            parsed.user.id = uId;
+            parsed.user.userId = uId;
+          }
+        }
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -37,8 +54,14 @@ export function AuthProvider({ children }) {
   // Step 1: Initial Login
   const login = async (username, password, remember = true) => {
     const res = await authApi.login(username, password, remember);
+    const resolvedUserId = res.user?.id || res.user?.userId || res.userId || 0;
+    const userData = res.user
+      ? { ...res.user, id: resolvedUserId, userId: resolvedUserId }
+      : res.user;
+
     const data = {
-      user: res.user,
+      user: userData,
+      userId: resolvedUserId,
       token: res.token,
       credentials: { username, password },
       remember,
@@ -63,9 +86,24 @@ export function AuthProvider({ children }) {
       warehouseId,
     });
 
+    const resolvedUserId =
+      res.userId ||
+      res.user?.userId ||
+      res.user?.id ||
+      tempAuth?.user?.userId ||
+      tempAuth?.user?.id ||
+      tempAuth?.userId ||
+      0;
+
     const fullSession = {
       ...res,
-      user: res.user || tempAuth.user,
+      userId: resolvedUserId,
+      user: {
+        ...(tempAuth?.user || {}),
+        ...(res.user || {}),
+        id: resolvedUserId,
+        userId: resolvedUserId,
+      },
       contextDetails: {
         clientName: clientName || String(clientId),
         roleName: roleName || String(roleId),

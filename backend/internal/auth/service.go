@@ -65,6 +65,7 @@ func (s *Service) LoginInitial(req LoginRequest) (*LoginInitialResponse, error) 
 	}
 
 	userInfo := &UserInfo{
+		ID:       userID,
 		UserID:   userID,
 		Username: username,
 		Name:     displayName,
@@ -238,6 +239,24 @@ func (s *Service) SelectContext(req SelectContextRequest) (*ContextLoginResponse
 	var userID int
 	if val, ok := rawResult["userId"].(float64); ok {
 		userID = int(val)
+	} else if val, ok := rawResult["id"].(float64); ok {
+		userID = int(val)
+	} else if val, ok := rawResult["ad_user_id"].(float64); ok {
+		userID = int(val)
+	}
+
+	// If userId was not provided in context token response, resolve from DB
+	if userID == 0 {
+		var resolvedID int
+		err := s.db.DB.Raw(`
+			SELECT ad_user_id 
+			FROM ad_user 
+			WHERE isactive = 'Y' AND (LOWER(name) = ? OR LOWER(value) = ?) 
+			LIMIT 1
+		`, strings.ToLower(username), strings.ToLower(username)).Scan(&resolvedID).Error
+		if err == nil && resolvedID > 0 {
+			userID = resolvedID
+		}
 	}
 
 	displayName := username
@@ -246,6 +265,7 @@ func (s *Service) SelectContext(req SelectContextRequest) (*ContextLoginResponse
 	}
 
 	userInfo := &UserInfo{
+		ID:       userID,
 		UserID:   userID,
 		Username: username,
 		Name:     displayName,
@@ -259,6 +279,7 @@ func (s *Service) SelectContext(req SelectContextRequest) (*ContextLoginResponse
 		RoleID:      req.RoleID,
 		OrgID:       req.OrgID,
 		WarehouseID: req.WarehouseID,
+		UserID:      userID,
 		User:        userInfo,
 		RawData:     rawResult,
 	}, nil

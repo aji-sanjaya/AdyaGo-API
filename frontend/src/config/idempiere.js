@@ -98,3 +98,4 @@ export const idempiereConfig = {
 };
 
 export default idempiereConfig;
+

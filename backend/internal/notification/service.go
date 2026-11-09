@@ -1,6 +1,8 @@
 package notification
 
 import (
+	"strings"
+
 	"factoryhub-go/internal/database"
 )
 
@@ -12,7 +14,25 @@ func NewService(db *database.DBInstance) *Service {
 	return &Service{db: db}
 }
 
+func (s *Service) ResolveUserID(username string) (int, error) {
+	var userID int
+	err := s.db.DB.Raw(`
+		SELECT ad_user_id 
+		FROM ad_user 
+		WHERE isactive = 'Y' AND (LOWER(name) = ? OR LOWER(value) = ?) 
+		LIMIT 1
+	`, strings.ToLower(username), strings.ToLower(username)).Scan(&userID).Error
+	return userID, err
+}
+
 func (s *Service) GetNotifications(clientID, userID, limit int) (*NotificationResponse, error) {
+	if userID <= 0 {
+		return &NotificationResponse{
+			Total:         0,
+			Notifications: []NoteNotification{},
+		}, nil
+	}
+
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
@@ -33,12 +53,12 @@ func (s *Service) GetNotifications(clientID, userID, limit int) (*NotificationRe
 		WHERE n.isactive = 'Y'
 		  AND n.processed = 'N'
 		  AND (? = 0 OR n.ad_client_id = ?)
-		  AND (? = 0 OR n.ad_user_id = ?)
+		  AND n.ad_user_id = ?
 		ORDER BY n.created DESC
 		LIMIT ?
 	`
 
-	err := s.db.DB.Raw(query, clientID, clientID, userID, userID, limit).Scan(&items).Error
+	err := s.db.DB.Raw(query, clientID, clientID, userID, limit).Scan(&items).Error
 	if err != nil {
 		return nil, err
 	}
@@ -50,9 +70,9 @@ func (s *Service) GetNotifications(clientID, userID, limit int) (*NotificationRe
 		WHERE n.isactive = 'Y'
 		  AND n.processed = 'N'
 		  AND (? = 0 OR n.ad_client_id = ?)
-		  AND (? = 0 OR n.ad_user_id = ?)
+		  AND n.ad_user_id = ?
 	`
-	_ = s.db.DB.Raw(countQuery, clientID, clientID, userID, userID).Scan(&total).Error
+	_ = s.db.DB.Raw(countQuery, clientID, clientID, userID).Scan(&total).Error
 
 	return &NotificationResponse{
 		Total:         total,

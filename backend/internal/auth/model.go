@@ -21,6 +21,7 @@ type LookupOption struct {
 }
 
 type UserInfo struct {
+	ID       int    `json:"id"`
 	UserID   int    `json:"userId"`
 	Username string `json:"username"`
 	Name     string `json:"name"`
@@ -43,6 +44,7 @@ type ContextLoginResponse struct {
 	RoleID       int                    `json:"roleId"`
 	OrgID        int                    `json:"orgId"`
 	WarehouseID  *int                   `json:"warehouseId,omitempty"`
+	UserID       int                    `json:"userId"`
 	User         *UserInfo              `json:"user,omitempty"`
 	RawData      map[string]interface{} `json:"raw_data,omitempty"`
 }

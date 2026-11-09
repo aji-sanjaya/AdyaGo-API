@@ -39,7 +39,14 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
   const warehouseName = contextDetails?.warehouseName || session?.warehouseName || '-';
 
   const clientId = session?.clientId || session?.client_id || 0;
-  const userId = session?.user?.id || session?.user?.user_id || session?.user?.ad_user_id || session?.userId || 0;
+  const userId =
+    session?.user?.userId ||
+    session?.user?.id ||
+    session?.userId ||
+    session?.user?.user_id ||
+    session?.user?.ad_user_id ||
+    0;
+  const username = session?.user?.username || session?.credentials?.username || '';
 
   const formatRelativeTime = (dateStr) => {
     if (!dateStr) return '';
@@ -61,12 +68,13 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
   };
 
   const fetchNotifications = async () => {
-    if (!clientId && !userId) return;
+    if (!clientId || (!userId && !username)) return;
     setNotifLoading(true);
     try {
       const res = await notificationApi.getNotifications({
         client_id: clientId,
         user_id: userId,
+        username: username,
         limit: 30,
       });
       if (res && res.data) {
@@ -86,7 +94,7 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
       fetchNotifications();
     }, 60000);
     return () => clearInterval(interval);
-  }, [clientId, userId]);
+  }, [clientId, userId, username]);
 
   // Close User & Notification Dropdowns on outside click or Escape key
   useEffect(() => {
