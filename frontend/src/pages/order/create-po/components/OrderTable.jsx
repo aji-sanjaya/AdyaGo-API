@@ -96,6 +96,7 @@ export default function OrderTable({
                 isDark ? 'border-slate-800 bg-slate-900/90 text-slate-400' : 'border-slate-100 bg-slate-50 text-slate-600'
               }`}
             >
+              <th className="py-3.5 px-4 font-bold text-center w-24">Actions</th>
               <th
                 onClick={() => onSort('documentno')}
                 className="py-3.5 px-4 font-bold cursor-pointer hover:text-cyan-400 transition-colors select-none"
@@ -134,20 +135,19 @@ export default function OrderTable({
                   <ArrowUpDown className="w-3 h-3 opacity-60" />
                 </div>
               </th>
-              <th className="py-3.5 px-4 font-bold text-center">Actions</th>
             </tr>
           </thead>
           <tbody className={`divide-y text-xs font-medium ${isDark ? 'divide-slate-800/60' : 'divide-slate-100'}`}>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
+                  <td className="py-4 px-4 text-center"><div className="h-4 bg-slate-800 rounded w-16 mx-auto"></div></td>
                   <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-28"></div></td>
                   <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-24"></div></td>
                   <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-36"></div></td>
                   <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-32"></div></td>
                   <td className="py-4 px-4 text-right"><div className="h-4 bg-slate-800 rounded w-24 ml-auto"></div></td>
                   <td className="py-4 px-4 text-center"><div className="h-4 bg-slate-800 rounded w-20 mx-auto"></div></td>
-                  <td className="py-4 px-4 text-center"><div className="h-4 bg-slate-800 rounded w-16 mx-auto"></div></td>
                 </tr>
               ))
             ) : orders.length === 0 ? (
@@ -165,10 +165,37 @@ export default function OrderTable({
                     isDark ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-50 text-slate-700'
                   }`}
                 >
+                  <td className="py-3.5 px-4 text-center">
+                    <div className="flex items-center justify-center space-x-1.5">
+                      <button
+                        onClick={() => onView(po)}
+                        title="View & Edit"
+                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                          isDark
+                            ? 'bg-slate-800 hover:bg-slate-700 text-cyan-400'
+                            : 'bg-slate-100 hover:bg-slate-200 text-indigo-600'
+                        }`}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => onPrint(po)}
+                        disabled={printLoadingId === po.c_order_id}
+                        title="Print Preview"
+                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                          isDark
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
                   <td className="py-3.5 px-4 font-mono font-bold">
                     <button
                       onClick={() => onView(po)}
-                      className="text-cyan-400 hover:text-cyan-300 hover:underline transition-colors flex items-center space-x-1.5"
+                      className="text-cyan-400 hover:text-cyan-300 hover:underline transition-colors flex items-center space-x-1.5 cursor-pointer"
                     >
                       <span>{po.documentno}</span>
                     </button>
@@ -209,33 +236,6 @@ export default function OrderTable({
                   </td>
                   <td className="py-3.5 px-4 text-center">
                     {getStatusBadge(po.docstatus, po.status_label)}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    <div className="flex items-center justify-center space-x-1.5">
-                      <button
-                        onClick={() => onView(po)}
-                        title="View & Edit"
-                        className={`p-2 rounded-xl transition-all ${
-                          isDark
-                            ? 'bg-slate-800 hover:bg-slate-700 text-cyan-400'
-                            : 'bg-slate-100 hover:bg-slate-200 text-indigo-600'
-                        }`}
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => onPrint(po)}
-                        disabled={printLoadingId === po.c_order_id}
-                        title="Print Preview"
-                        className={`p-2 rounded-xl transition-all ${
-                          isDark
-                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        <Printer className="w-4 h-4" />
-                      </button>
-                    </div>
                   </td>
                 </tr>
               ))
@@ -306,3 +306,4 @@ export default function OrderTable({
     </div>
   );
 }
+
