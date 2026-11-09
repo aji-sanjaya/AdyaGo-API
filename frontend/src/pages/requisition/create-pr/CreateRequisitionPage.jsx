@@ -1130,8 +1130,57 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
     fontSize: '0.75rem',
   });
 
-  const orgOptions =
-    options?.organizations?.map((org) => ({ value: org.id, label: org.text })) || [];
+  const allOrgList = useMemo(
+    () => options?.organizations?.map((org) => ({ value: org.id, label: org.text })) || [],
+    [options?.organizations]
+  );
+
+  const isAllOrgsContext =
+    !orgIdDefault ||
+    orgIdDefault === 0 ||
+    session?.contextDetails?.orgName === '* (All)' ||
+    session?.contextDetails?.orgName === '*';
+
+  const orgOptions = useMemo(() => {
+    // If not a new record, ensure the saved record's org is in options so label displays correctly
+    if (!isNew) {
+      if (isAllOrgsContext) return allOrgList;
+      const filtered = allOrgList.filter(
+        (org) => Number(org.value) === Number(orgIdDefault)
+      );
+      if (orgId) {
+        const docOrg = allOrgList.find((org) => Number(org.value) === Number(orgId));
+        if (docOrg && !filtered.some((f) => Number(f.value) === Number(docOrg.value))) {
+          return [...filtered, docOrg];
+        }
+      }
+      return filtered.length > 0 ? filtered : allOrgList;
+    }
+
+    // Creating new record:
+    if (isAllOrgsContext) {
+      return allOrgList;
+    }
+
+    const filtered = allOrgList.filter(
+      (org) => Number(org.value) === Number(orgIdDefault)
+    );
+    if (filtered.length > 0) {
+      return filtered;
+    }
+
+    // Try matching by contextDetails.orgName if ID wasn't matched
+    if (session?.contextDetails?.orgName && session.contextDetails.orgName !== '* (All)') {
+      const byName = allOrgList.filter(
+        (org) =>
+          org.label.trim().toLowerCase() ===
+          session.contextDetails.orgName.trim().toLowerCase()
+      );
+      if (byName.length > 0) return byName;
+    }
+
+    return allOrgList;
+  }, [allOrgList, isAllOrgsContext, orgIdDefault, session?.contextDetails?.orgName, isNew, orgId]);
   const warehouseOptions =
     options?.warehouses?.map((wh) => ({ value: wh.id, label: wh.text })) || [];
   const pricelistOptions =
@@ -1679,7 +1728,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                             options={orgOptions}
                             styles={formSelectStyles}
                             placeholder="- Select Organization -"
-                            isDisabled={isReadOnly}
+                            isDisabled={isReadOnly || !isNew}
                             isSearchable
                             menuPlacement="auto"
                             minMenuHeight={280}
