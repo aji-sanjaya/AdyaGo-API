@@ -852,6 +852,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
 
   // Load master options & requisition detail
   useEffect(() => {
+    let isMounted = true;
     setLoading(true);
     setError(null);
 
@@ -894,6 +895,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
 
     Promise.all([loadOptions, loadDetail, loadAtts, loadChatData, loadLogsData, loadOrdersData])
       .then(([optRes, detailRes, attRes, chatRes, logsRes, ordersRes]) => {
+        if (!isMounted) return;
         const optData = optRes.data || {};
         setOptions(optData);
 
@@ -973,12 +975,17 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
         }
       })
       .catch((err) => {
+        if (!isMounted) return;
         console.error('Failed to load requisition data:', err);
         setError('Failed to load master data or requisition details.');
       })
       .finally(() => {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       });
+
+    return () => {
+      isMounted = false;
+    };
   }, [clientId, orgIdDefault, warehouseIdDefault, isNew, targetId]);
 
   const handleOrgChange = async (newOrgId) => {

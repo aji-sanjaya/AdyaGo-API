@@ -8,6 +8,29 @@ const api = axios.create({
   },
 });
 
+const inflightRequests = new Map();
+
+const dedupedGet = async (url, options = {}) => {
+  const cacheKey = `${url}_${JSON.stringify(options.params || {})}`;
+  if (inflightRequests.has(cacheKey)) {
+    return inflightRequests.get(cacheKey);
+  }
+
+  const promise = api
+    .get(url, options)
+    .then((res) => {
+      inflightRequests.delete(cacheKey);
+      return res.data;
+    })
+    .catch((err) => {
+      inflightRequests.delete(cacheKey);
+      throw err;
+    });
+
+  inflightRequests.set(cacheKey, promise);
+  return promise;
+};
+
 const masterOptionsCache = new Map();
 const masterOptionsPromises = new Map();
 
@@ -19,22 +42,20 @@ export const getCachedMasterOptions = (params = {}) => {
 export const clearMasterOptionsCache = () => {
   masterOptionsCache.clear();
   masterOptionsPromises.clear();
+  inflightRequests.clear();
 };
 
 export const requisitionApi = {
   getRequisitions: async (params = {}) => {
-    const response = await api.get('/requisitions', { params });
-    return response.data;
+    return dedupedGet('/requisitions', { params });
   },
 
   getRequisitionDetail: async (id) => {
-    const response = await api.get(`/requisitions/${id}`);
-    return response.data;
+    return dedupedGet(`/requisitions/${id}`);
   },
 
   getRequisitionLines: async (id) => {
-    const response = await api.get(`/requisitions/${id}/lines`);
-    return response.data;
+    return dedupedGet(`/requisitions/${id}/lines`);
   },
 
   getMasterOptions: async (params = {}, forceRefresh = false) => {
@@ -63,8 +84,7 @@ export const requisitionApi = {
   },
 
   searchProducts: async (params = {}) => {
-    const response = await api.get('/requisitions/products', { params });
-    return response.data;
+    return dedupedGet('/requisitions/products', { params });
   },
 
   createRequisition: async (data, params = {}, token = '') => {
@@ -110,8 +130,7 @@ export const requisitionApi = {
   },
 
   getAttachments: async (id) => {
-    const response = await api.get(`/requisitions/${id}/attachments`);
-    return response.data;
+    return dedupedGet(`/requisitions/${id}/attachments`);
   },
 
   uploadAttachment: async (id, file, token = '') => {
@@ -136,8 +155,7 @@ export const requisitionApi = {
   },
 
   getChat: async (id) => {
-    const response = await api.get(`/requisitions/${id}/chat`);
-    return response.data;
+    return dedupedGet(`/requisitions/${id}/chat`);
   },
 
   sendChatMessage: async (id, message, file = null, token = '') => {
@@ -157,13 +175,10 @@ export const requisitionApi = {
   },
 
   getChangeLogs: async (id) => {
-    const response = await api.get(`/requisitions/${id}/changelogs`);
-    return response.data;
+    return dedupedGet(`/requisitions/${id}/changelogs`);
   },
 
   getOrders: async (id) => {
-    const response = await api.get(`/requisitions/${id}/orders`);
-    return response.data;
+    return dedupedGet(`/requisitions/${id}/orders`);
   },
 };
-
