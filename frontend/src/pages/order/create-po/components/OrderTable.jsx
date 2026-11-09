@@ -376,7 +376,7 @@ export default function OrderTable({
                   </td>
 
                   {/* Grand Total */}
-                  <td className="px-4 py-2 text-right font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                  <td className="px-4 py-2 text-right font-mono text-slate-400 whitespace-nowrap">
                     {formatCurrency(po.grandtotal)}
                   </td>
 
