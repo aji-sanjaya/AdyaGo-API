@@ -14,6 +14,8 @@ import DeliveryDashboardPage from './pages/dashboard/delivery/DeliveryDashboardP
 import WarehouseDashboardPage from './pages/dashboard/warehouse/WarehouseDashboardPage';
 import CreatePrPage from './pages/requisition/create-pr/CreatePrPage';
 import CreateRequisitionPage from './pages/requisition/create-pr/CreateRequisitionPage';
+import CreatePoPage from './pages/order/create-po/CreatePoPage';
+import CreatePurchaseOrderPage from './pages/order/create-po/CreatePurchaseOrderPage';
 
 function RequisitionIndexDispatcher() {
   const [searchParams] = useSearchParams();
@@ -26,11 +28,25 @@ function RequisitionIndexDispatcher() {
   return <CreatePrPage />;
 }
 
+function PoIndexDispatcher() {
+  const [searchParams] = useSearchParams();
+  const docId = searchParams.get('documentID') || searchParams.get('document_id');
+
+  if (docId) {
+    return <CreatePurchaseOrderPage key={docId} documentIdParam={docId} />;
+  }
+
+  return <CreatePoPage />;
+}
+
 function AppContent() {
   const { isDark } = useTheme();
   const location = useLocation();
 
-  const isModulePage = location.pathname.includes('-dashboard') || location.pathname.startsWith('/create-pr');
+  const isModulePage =
+    location.pathname.includes('-dashboard') ||
+    location.pathname.startsWith('/create-pr') ||
+    location.pathname.startsWith('/create-po');
 
   if (isModulePage) {
     return (
@@ -82,6 +98,22 @@ function AppContent() {
             element={
               <ProtectedRoute>
                 <CreateRequisitionPage key="new" documentIdParam="new" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/create-po"
+            element={
+              <ProtectedRoute>
+                <PoIndexDispatcher />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/create-po/new"
+            element={
+              <ProtectedRoute>
+                <CreatePurchaseOrderPage key="new" documentIdParam="new" />
               </ProtectedRoute>
             }
           />

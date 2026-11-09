@@ -95,6 +95,82 @@ export const idempiereConfig = {
       },
     },
   },
+
+  // Module Configuration: Purchase Order (create-po)
+  createPo: {
+    docTypes: {
+      purchaseOrder: Number(import.meta.env.VITE_IDEMPIERE_DOC_TYPE_PO_ID || 1000016),
+      baseType: 'POO',
+    },
+    defaults: {
+      isSoTrx: 'N',
+      deliveryViaRule: 'P',
+      priorityRule: '5', // 5 = Medium
+      currencyId: Number(import.meta.env.VITE_IDEMPIERE_PO_CURRENCY_ID || 303),
+      pricelistId: Number(import.meta.env.VITE_IDEMPIERE_PO_PRICELIST_ID || 1000208),
+      paymentRule: 'P',
+      paymentTermId: Number(import.meta.env.VITE_IDEMPIERE_PO_PAYMENT_TERM_ID || 1000007),
+      chargeTaxId: Number(import.meta.env.VITE_IDEMPIERE_PO_CHARGE_TAX_ID || 1000001),
+      documentStatusLabel: 'Draft',
+    },
+    statuses: {
+      completed: ['CO', 'CL'],
+      draft: ['DR', 'IN'],
+      inProgress: ['IP'],
+      readOnly: ['CO', 'CL', 'VO', 'RE'],
+      printable: ['IP', 'CO', 'DR'],
+      lineEditable: ['DR', 'IN', 'IP'],
+      actionBlocked: ['CL', 'VO', 'RE'],
+      filterOptions: [
+        { value: '', label: 'All Statuses' },
+        { value: 'DR', label: 'Drafted' },
+        { value: 'IP', label: 'In Progress' },
+        { value: 'CO', label: 'Completed' },
+        { value: 'CL', label: 'Closed' },
+        { value: 'VO', label: 'Voided' },
+        { value: 'RE', label: 'Reversed' },
+      ],
+      labels: {
+        DR: 'Draft',
+        IN: 'Draft',
+        IP: 'In Progress',
+        CO: 'Completed',
+        CL: 'Closed',
+        VO: 'Voided',
+        RE: 'Reversed',
+      },
+    },
+    limits: {
+      listPerPage: 10,
+      lineDefaultPerPage: 10,
+      linePerPageOptions: [10, 25, 50, 100],
+      productsPerPage: 25,
+      vendorSearch: 1500,
+      lineIncrement: 10,
+    },
+    workflow: {
+      allowedActions: ['CO', 'PR', 'VO', 'CL', 'RE'],
+      completeAction: 'CO',
+      prepareAction: 'PR',
+      voidAction: 'VO',
+      closeAction: 'CL',
+      reactivateAction: 'RE',
+      actionLabels: {
+        CO: 'Complete',
+        PR: 'Prepare',
+        VO: 'Void',
+        CL: 'Close',
+        RE: 'Re-Activate',
+      },
+      confirmationMessages: {
+        CO: 'Are you sure you want to complete this purchase order?',
+        PR: 'Are you sure you want to prepare this purchase order?',
+        VO: 'Are you sure you want to void this purchase order? This action cannot be undone!',
+        CL: 'Are you sure you want to close this purchase order?',
+        RE: 'Are you sure you want to re-activate this purchase order back to In Progress?',
+      },
+    },
+  },
 };
 
 export default idempiereConfig;

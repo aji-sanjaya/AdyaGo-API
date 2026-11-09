@@ -16,6 +16,7 @@ import (
 	"factoryhub-go/internal/idempiere"
 	"factoryhub-go/internal/menu"
 	"factoryhub-go/internal/notification"
+	"factoryhub-go/internal/order"
 	"factoryhub-go/internal/requisition"
 	"factoryhub-go/internal/security"
 
@@ -59,6 +60,10 @@ func main() {
 	reqService := requisition.NewService(dbInstance, idempiereClient, cfg)
 	reqHandler := requisition.NewHandler(reqService)
 
+	// Initialize Purchase Order (Create PO) module
+	orderService := order.NewService(dbInstance, idempiereClient, cfg)
+	orderHandler := order.NewHandler(orderService)
+
 	// Initialize Notification module
 	notifService := notification.NewService(dbInstance)
 	notifHandler := notification.NewHandler(notifService)
@@ -92,6 +97,7 @@ func main() {
 	menuHandler.RegisterRoutes(v1)
 	dashHandler.RegisterRoutes(v1)
 	reqHandler.RegisterRoutes(v1)
+	orderHandler.RegisterRoutes(v1)
 	notifHandler.RegisterRoutes(v1)
 
 	// Graceful server startup

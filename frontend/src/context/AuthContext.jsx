@@ -4,6 +4,7 @@ import { idempiereConfig } from '../config/idempiere';
 import { clearSidebarMenuCache } from '../api/dashboard';
 import { clearNotificationCache } from '../api/notification';
 import { clearMasterOptionsCache } from '../api/requisition';
+import { clearMasterOptionsCache as clearOrderMasterOptionsCache } from '../api/order';
 
 const AuthContext = createContext(null);
 
@@ -127,6 +128,7 @@ export function AuthProvider({ children }) {
     clearSidebarMenuCache();
     clearNotificationCache();
     clearMasterOptionsCache();
+    clearOrderMasterOptionsCache();
     localStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(TEMP_AUTH_KEY);
