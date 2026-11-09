@@ -79,7 +79,18 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
 
   const todayStr = new Date().toISOString().split('T')[0];
   const clientId = session?.clientId || session?.client_id || 0;
-  const orgIdDefault = session?.orgId || session?.org_id || 0;
+  const orgIdDefault =
+    session?.orgId !== undefined && session?.orgId !== null && session?.orgId !== ''
+      ? Number(session.orgId)
+      : session?.org_id !== undefined && session?.org_id !== null && session?.org_id !== ''
+      ? Number(session.org_id)
+      : 0;
+  const warehouseIdDefault =
+    session?.warehouseId !== undefined && session?.warehouseId !== null && session?.warehouseId !== ''
+      ? Number(session.warehouseId)
+      : session?.warehouse_id !== undefined && session?.warehouse_id !== null && session?.warehouse_id !== ''
+      ? Number(session.warehouse_id)
+      : 0;
   const userId = session?.user?.id || session?.user?.userId || 0;
 
   // Active tab state
@@ -96,9 +107,9 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
   const [loadingLines, setLoadingLines] = useState(false);
   const [linesLoaded, setLinesLoaded] = useState(false);
 
-  // Form Fields State
-  const [orgId, setOrgId] = useState('');
-  const [warehouseId, setWarehouseId] = useState('');
+  // Form Fields State (default to context org and warehouse when new)
+  const [orgId, setOrgId] = useState(isNew && orgIdDefault ? orgIdDefault : '');
+  const [warehouseId, setWarehouseId] = useState(isNew && warehouseIdDefault ? warehouseIdDefault : '');
   const [pricelistId, setPricelistId] = useState(1000208); // Default Purchase IDR
   const [priorityRule, setPriorityRule] = useState('5'); // Default Medium
   const [dateDoc, setDateDoc] = useState(todayStr);
@@ -585,8 +596,8 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
     if (header) {
       setDocHeader(header);
       if (populateForm) {
-        setOrgId(header.org_id || '');
-        setWarehouseId(header.warehouse_id || '');
+        setOrgId(header.org_id ? Number(header.org_id) : (orgIdDefault ? Number(orgIdDefault) : ''));
+        setWarehouseId(header.warehouse_id ? Number(header.warehouse_id) : (warehouseIdDefault ? Number(warehouseIdDefault) : ''));
         setPricelistId(header.pricelist_id || 1000208);
         setPriorityRule(header.priority_rule || '5');
         setDateDoc(header.datedoc ? header.datedoc.split('T')[0] : todayStr);
@@ -905,16 +916,53 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
           const { header } = detailRes.data;
           applyRecordData(header, null, true);
         } else {
-          // Defaults for new record
+          // Defaults for new record: set default according to active context
           if (optData.organizations?.length > 0) {
-            const matchedOrg = optData.organizations.find(
-              (o) => o.id === orgIdDefault
-            );
-            setOrgId(matchedOrg ? matchedOrg.id : optData.organizations[0].id);
+            const targetOrgId = Number(orgIdDefault);
+            const matchedOrg = targetOrgId
+              ? optData.organizations.find((o) => Number(o.id) === targetOrgId)
+              : null;
+
+            const matchedOrgByName =
+              !matchedOrg &&
+              session?.contextDetails?.orgName &&
+              session.contextDetails.orgName !== '* (All)'
+                ? optData.organizations.find(
+                    (o) =>
+                      o.text.trim().toLowerCase() ===
+                      session.contextDetails.orgName.trim().toLowerCase()
+                  )
+                : null;
+
+            const defaultOrg = matchedOrg || matchedOrgByName || optData.organizations[0];
+            if (defaultOrg) {
+              setOrgId(defaultOrg.id);
+            }
           }
+
           if (optData.warehouses?.length > 0) {
-            setWarehouseId(optData.warehouses[0].id);
+            const targetWhId = Number(warehouseIdDefault);
+            const matchedWh = targetWhId
+              ? optData.warehouses.find((w) => Number(w.id) === targetWhId)
+              : null;
+
+            const matchedWhByName =
+              !matchedWh &&
+              session?.contextDetails?.warehouseName &&
+              session.contextDetails.warehouseName !== '-'
+                ? optData.warehouses.find(
+                    (w) =>
+                      w.text.trim().toLowerCase() ===
+                      session.contextDetails.warehouseName.trim().toLowerCase()
+                  )
+                : null;
+
+            const defaultWh = matchedWh || matchedWhByName || optData.warehouses[0];
+            if (defaultWh) {
+              setWarehouseId(defaultWh.id);
+            }
           }
+
           if (optData.pricelists?.length > 0) {
             const purchaseIdr = optData.pricelists.find((pl) =>
               pl.text.toLowerCase().includes('purchase idr')
@@ -930,7 +978,38 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
       .finally(() => {
         setLoading(false);
       });
-  }, [clientId, orgIdDefault, isNew, targetId]);
+  }, [clientId, orgIdDefault, warehouseIdDefault, isNew, targetId]);
+
+  const handleOrgChange = async (newOrgId) => {
+    setOrgId(newOrgId);
+    if (!newOrgId) return;
+    try {
+      const res = await requisitionApi.getMasterOptions({
+        client_id: clientId,
+        org_id: newOrgId,
+      });
+      if (res.data?.warehouses) {
+        setOptions((prev) => ({
+          ...prev,
+          warehouses: res.data.warehouses,
+        }));
+        // If current warehouse is no longer valid in the new org, check if context warehouse exists, otherwise default to first
+        const stillValid = res.data.warehouses.some(
+          (w) => Number(w.id) === Number(warehouseId)
+        );
+        if (!stillValid && res.data.warehouses.length > 0) {
+          const matchedWh = warehouseIdDefault
+            ? res.data.warehouses.find(
+                (w) => Number(w.id) === Number(warehouseIdDefault)
+              )
+            : null;
+          setWarehouseId(matchedWh ? matchedWh.id : res.data.warehouses[0].id);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to update warehouses for selected organization:', err);
+    }
+  };
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
@@ -1596,7 +1675,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                         <div className="col-span-1 sm:col-span-2">
                           <Select
                             value={selectedOrg}
-                            onChange={(opt) => setOrgId(opt ? opt.value : '')}
+                            onChange={(opt) => handleOrgChange(opt ? opt.value : '')}
                             options={orgOptions}
                             styles={formSelectStyles}
                             placeholder="- Select Organization -"
