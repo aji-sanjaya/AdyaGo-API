@@ -8,6 +8,19 @@ const api = axios.create({
   },
 });
 
+const sidebarMenuCache = new Map();
+const sidebarMenuPromises = new Map();
+
+export const getCachedSidebarMenus = (roleId, rootId) => {
+  const cacheKey = `${roleId}_${rootId}`;
+  return sidebarMenuCache.get(cacheKey) || null;
+};
+
+export const clearSidebarMenuCache = () => {
+  sidebarMenuCache.clear();
+  sidebarMenuPromises.clear();
+};
+
 export const dashboardApi = {
   getProcurementDashboard: async (clientId, orgId) => {
     const params = {};
@@ -41,11 +54,29 @@ export const dashboardApi = {
     return response.data;
   },
 
-  getSidebarMenus: async (roleId, rootId) => {
-    const response = await api.get('/menus/sidebar', {
+  getSidebarMenus: async (roleId, rootId, forceRefresh = false) => {
+    const cacheKey = `${roleId}_${rootId}`;
+    if (!forceRefresh && sidebarMenuCache.has(cacheKey)) {
+      return sidebarMenuCache.get(cacheKey);
+    }
+    if (!forceRefresh && sidebarMenuPromises.has(cacheKey)) {
+      return sidebarMenuPromises.get(cacheKey);
+    }
+
+    const fetchPromise = api.get('/menus/sidebar', {
       params: { role_id: roleId, root_id: rootId }
-    });
-    return response.data;
+    })
+      .then((response) => {
+        sidebarMenuCache.set(cacheKey, response.data);
+        sidebarMenuPromises.delete(cacheKey);
+        return response.data;
+      })
+      .catch((err) => {
+        sidebarMenuPromises.delete(cacheKey);
+        throw err;
+      });
+
+    sidebarMenuPromises.set(cacheKey, fetchPromise);
+    return fetchPromise;
   }
 };
-

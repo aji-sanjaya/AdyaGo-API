@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { dashboardApi } from '../api/dashboard';
-import { notificationApi } from '../api/notification';
+import { dashboardApi, getCachedSidebarMenus } from '../api/dashboard';
+import { notificationApi, getCachedNotifications } from '../api/notification';
 import {
   Cpu, ArrowLeft, LayoutDashboard, ShoppingCart, TrendingUp,
   Truck, Warehouse, RefreshCw, LogOut, ChevronRight, ChevronDown, Menu, X,
@@ -17,9 +17,44 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
   const { session, logout, prepareSwitchRole } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
-  const [sidebarGroups, setSidebarGroups] = useState([]);
+  const roleId = session?.roleId || session?.role_id;
+  const user = session?.user;
+  const contextDetails = session?.contextDetails;
+  const clientName = contextDetails?.clientName || session?.clientName || 'Tenant';
+  const roleName = contextDetails?.roleName || session?.roleName || 'Role';
+  const orgName = contextDetails?.orgName || session?.orgName || 'Org';
+  const warehouseName = contextDetails?.warehouseName || session?.warehouseName || '-';
+
+  const clientId = session?.clientId || session?.client_id || 0;
+  const userId =
+    session?.user?.userId ||
+    session?.user?.id ||
+    session?.userId ||
+    session?.user?.user_id ||
+    session?.user?.ad_user_id ||
+    0;
+  const username = session?.user?.username || session?.credentials?.username || '';
+
+  // Saved root menu ID from session storage or fallback prop
+  const currentRootId = sessionStorage.getItem('selected_root_id') || rootMenuId;
+  const currentRootName = sessionStorage.getItem('selected_root_name') || rootMenuName;
+
+  const [sidebarGroups, setSidebarGroups] = useState(() => {
+    if (roleId && currentRootId) {
+      const cached = getCachedSidebarMenus(roleId, currentRootId);
+      if (cached?.data) return cached.data;
+      if (Array.isArray(cached)) return cached;
+    }
+    return [];
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [loadingSidebar, setLoadingSidebar] = useState(false);
+  const [loadingSidebar, setLoadingSidebar] = useState(() => {
+    if (roleId && currentRootId) {
+      const cached = getCachedSidebarMenus(roleId, currentRootId);
+      if (cached) return false;
+    }
+    return false;
+  });
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const userDropdownRef = useRef(null);
 
@@ -42,30 +77,18 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
     });
   };
 
-  // Notification state
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  // Notification state initialized from cache if available
+  const [notifications, setNotifications] = useState(() => {
+    const cached = getCachedNotifications({ client_id: clientId, user_id: userId, username });
+    return cached?.data?.notifications || [];
+  });
+  const [unreadCount, setUnreadCount] = useState(() => {
+    const cached = getCachedNotifications({ client_id: clientId, user_id: userId, username });
+    return cached?.data?.total || cached?.data?.notifications?.length || 0;
+  });
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
   const notifDropdownRef = useRef(null);
-
-  const roleId = session?.roleId || session?.role_id;
-  const user = session?.user;
-  const contextDetails = session?.contextDetails;
-  const clientName = contextDetails?.clientName || session?.clientName || 'Tenant';
-  const roleName = contextDetails?.roleName || session?.roleName || 'Role';
-  const orgName = contextDetails?.orgName || session?.orgName || 'Org';
-  const warehouseName = contextDetails?.warehouseName || session?.warehouseName || '-';
-
-  const clientId = session?.clientId || session?.client_id || 0;
-  const userId =
-    session?.user?.userId ||
-    session?.user?.id ||
-    session?.userId ||
-    session?.user?.user_id ||
-    session?.user?.ad_user_id ||
-    0;
-  const username = session?.user?.username || session?.credentials?.username || '';
 
   const formatRelativeTime = (dateStr) => {
     if (!dateStr) return '';
@@ -86,16 +109,29 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
     }
   };
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (force = false) => {
     if (!clientId || (!userId && !username)) return;
+
+    if (!force) {
+      const cached = getCachedNotifications({ client_id: clientId, user_id: userId, username });
+      if (cached && cached.data) {
+        setNotifications(cached.data.notifications || []);
+        setUnreadCount(cached.data.total || (cached.data.notifications || []).length);
+        return;
+      }
+    }
+
     setNotifLoading(true);
     try {
-      const res = await notificationApi.getNotifications({
-        client_id: clientId,
-        user_id: userId,
-        username: username,
-        limit: 30,
-      });
+      const res = await notificationApi.getNotifications(
+        {
+          client_id: clientId,
+          user_id: userId,
+          username: username,
+          limit: 30,
+        },
+        force
+      );
       if (res && res.data) {
         setNotifications(res.data.notifications || []);
         setUnreadCount(res.data.total || (res.data.notifications || []).length);
@@ -108,9 +144,9 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
   };
 
   useEffect(() => {
-    fetchNotifications();
+    fetchNotifications(false);
     const interval = setInterval(() => {
-      fetchNotifications();
+      fetchNotifications(true);
     }, 60000);
     return () => clearInterval(interval);
   }, [clientId, userId, username]);
@@ -148,12 +184,15 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
     };
   }, []);
 
-  // Saved root menu ID from session storage or fallback prop
-  const currentRootId = sessionStorage.getItem('selected_root_id') || rootMenuId;
-  const currentRootName = sessionStorage.getItem('selected_root_name') || rootMenuName;
-
   useEffect(() => {
     if (!roleId || !currentRootId) return;
+
+    const cached = getCachedSidebarMenus(roleId, currentRootId);
+    if (cached && cached.data) {
+      setSidebarGroups(cached.data);
+      setLoadingSidebar(false);
+      return;
+    }
 
     let isMounted = true;
     setLoadingSidebar(true);

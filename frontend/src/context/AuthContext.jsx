@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '../api/auth';
 import { idempiereConfig } from '../config/idempiere';
+import { clearSidebarMenuCache } from '../api/dashboard';
+import { clearNotificationCache } from '../api/notification';
+import { clearMasterOptionsCache } from '../api/requisition';
 
 const AuthContext = createContext(null);
 
@@ -121,6 +124,9 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    clearSidebarMenuCache();
+    clearNotificationCache();
+    clearMasterOptionsCache();
     localStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(TEMP_AUTH_KEY);

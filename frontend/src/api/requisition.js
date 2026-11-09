@@ -8,6 +8,19 @@ const api = axios.create({
   },
 });
 
+const masterOptionsCache = new Map();
+const masterOptionsPromises = new Map();
+
+export const getCachedMasterOptions = (params = {}) => {
+  const cacheKey = `${params.client_id || ''}_${params.org_id || ''}`;
+  return masterOptionsCache.get(cacheKey) || null;
+};
+
+export const clearMasterOptionsCache = () => {
+  masterOptionsCache.clear();
+  masterOptionsPromises.clear();
+};
+
 export const requisitionApi = {
   getRequisitions: async (params = {}) => {
     const response = await api.get('/requisitions', { params });
@@ -24,9 +37,29 @@ export const requisitionApi = {
     return response.data;
   },
 
-  getMasterOptions: async (params = {}) => {
-    const response = await api.get('/requisitions/options', { params });
-    return response.data;
+  getMasterOptions: async (params = {}, forceRefresh = false) => {
+    const cacheKey = `${params.client_id || ''}_${params.org_id || ''}`;
+    if (!forceRefresh && masterOptionsCache.has(cacheKey)) {
+      return masterOptionsCache.get(cacheKey);
+    }
+    if (!forceRefresh && masterOptionsPromises.has(cacheKey)) {
+      return masterOptionsPromises.get(cacheKey);
+    }
+
+    const fetchPromise = api
+      .get('/requisitions/options', { params })
+      .then((response) => {
+        masterOptionsCache.set(cacheKey, response.data);
+        masterOptionsPromises.delete(cacheKey);
+        return response.data;
+      })
+      .catch((err) => {
+        masterOptionsPromises.delete(cacheKey);
+        throw err;
+      });
+
+    masterOptionsPromises.set(cacheKey, fetchPromise);
+    return fetchPromise;
   },
 
   searchProducts: async (params = {}) => {
