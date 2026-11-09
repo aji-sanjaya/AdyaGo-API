@@ -8,7 +8,8 @@ import {
   Cpu, ArrowLeft, LayoutDashboard, ShoppingCart, TrendingUp,
   Truck, Warehouse, RefreshCw, LogOut, ChevronRight, ChevronDown, Menu, X,
   Sun, Moon, Bell, User, FileText, Building2, Shield, Network,
-  AlertTriangle, CheckCircle2, Info, ExternalLink, Clock, Loader2
+  AlertTriangle, CheckCircle2, Info, ExternalLink, Clock, Loader2,
+  PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 
 export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMenuId = 1000030, rootMenuName = 'Dashboard' }) {
@@ -22,6 +23,25 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
   const [loadingSidebar, setLoadingSidebar] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const userDropdownRef = useRef(null);
+
+  // Persistent sidebar collapsed/minimized state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('adyago_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('adyago_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Notification state
   const [notifications, setNotifications] = useState([]);
@@ -110,6 +130,15 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
       if (e.key === 'Escape') {
         setUserDropdownOpen(false);
         setNotifDropdownOpen(false);
+        setMobileMenuOpen(false);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        if (window.innerWidth < 1024) {
+          setMobileMenuOpen((prev) => !prev);
+        } else {
+          toggleSidebar();
+        }
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -250,8 +279,12 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
 
       {/* Left Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 flex flex-col justify-between transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed inset-y-0 left-0 z-50 w-72 flex flex-col justify-between transition-transform duration-300 ease-in-out ${
+          mobileMenuOpen
+            ? 'translate-x-0'
+            : sidebarCollapsed
+            ? '-translate-x-full'
+            : '-translate-x-full lg:translate-x-0'
         } ${
           isDark
             ? 'bg-slate-900/95 border-r border-slate-800/80 shadow-[10px_0_30px_rgba(0,0,0,0.5)]'
@@ -278,10 +311,19 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
             </div>
 
             <button
-              onClick={() => setMobileMenuOpen(false)}
-              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white"
+              type="button"
+              onClick={() => {
+                if (window.innerWidth < 1024) {
+                  setMobileMenuOpen(false);
+                } else {
+                  toggleSidebar();
+                }
+              }}
+              title="Minimize Sidebar"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <PanelLeftClose className="w-5 h-5 hidden lg:block" />
+              <X className="w-5 h-5 lg:hidden" />
             </button>
           </div>
 
@@ -482,7 +524,11 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:pl-72 flex flex-col min-h-screen min-w-0 max-w-full overflow-x-clip">
+      <div
+        className={`flex-1 flex flex-col min-h-screen min-w-0 max-w-full overflow-x-clip transition-all duration-300 ease-in-out ${
+          sidebarCollapsed ? 'lg:pl-0' : 'lg:pl-72'
+        }`}
+      >
         {/* Top Floating Navbar */}
         <header
           className={`sticky top-0 z-30 flex items-center justify-between px-3 sm:px-6 py-3 border-b backdrop-blur-xl transition-all duration-300 w-full min-w-0 ${
@@ -492,11 +538,33 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
           }`}
         >
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 mr-2">
+            {/* Sidebar Minimize / Expand Button */}
             <button
-              onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 flex-shrink-0"
+              type="button"
+              onClick={() => {
+                if (window.innerWidth < 1024) {
+                  setMobileMenuOpen((prev) => !prev);
+                } else {
+                  toggleSidebar();
+                }
+              }}
+              title={sidebarCollapsed ? 'Expand Side Menu (Ctrl+B)' : 'Minimize Side Menu (Ctrl+B)'}
+              aria-label="Toggle Side Menu"
+              className={`p-2 rounded-xl border transition cursor-pointer flex items-center justify-center flex-shrink-0 ${
+                sidebarCollapsed
+                  ? isDark
+                    ? 'text-cyan-400 bg-cyan-950/40 border-cyan-500/40 hover:bg-cyan-900/50'
+                    : 'text-indigo-600 bg-indigo-50 border-indigo-200 hover:bg-indigo-100'
+                  : isDark
+                  ? 'text-slate-300 bg-slate-800/80 hover:bg-slate-700 border-slate-700 hover:text-white'
+                  : 'text-slate-700 bg-slate-100 hover:bg-slate-200 border-slate-200 hover:text-slate-900'
+              }`}
             >
-              <Menu className="w-5 h-5" />
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="w-5 h-5 transition-transform duration-200" />
+              ) : (
+                <PanelLeftClose className="w-5 h-5 transition-transform duration-200" />
+              )}
             </button>
 
             <div className="min-w-0">
