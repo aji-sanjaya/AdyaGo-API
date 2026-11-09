@@ -905,7 +905,7 @@ func (s *Service) UpdateOrder(orderID int, req *UpdateOrderRequest, token string
 			payload["Bill_Location_ID"] = locID
 		}
 	}
-	if req.ADUserID != nil {
+	if req.ADUserID != nil && *req.ADUserID > 0 {
 		payload["AD_User_ID"] = *req.ADUserID
 		payload["Bill_User_ID"] = *req.ADUserID
 	}
@@ -937,10 +937,10 @@ func (s *Service) UpdateOrder(orderID int, req *UpdateOrderRequest, token string
 	if req.TaxID > 0 {
 		payload["C_Tax_ID"] = req.TaxID
 	}
-	if req.CostCenterID != nil {
+	if req.CostCenterID != nil && *req.CostCenterID > 0 {
 		payload["C_CostCenter_ID"] = *req.CostCenterID
 	}
-	if req.ProjectID != nil {
+	if req.ProjectID != nil && *req.ProjectID > 0 {
 		payload["C_Project_ID"] = *req.ProjectID
 	}
 

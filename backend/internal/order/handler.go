@@ -68,6 +68,19 @@ func extractToken(c *gin.Context) string {
 	return ""
 }
 
+func (h *Handler) respondError(c *gin.Context, err error) {
+	status := http.StatusInternalServerError
+	errStr := err.Error()
+	if strings.Contains(errStr, "401") || strings.Contains(errStr, "Token has expired") {
+		status = http.StatusUnauthorized
+	}
+	c.JSON(status, gin.H{
+		"success": false,
+		"message": errStr,
+		"error":   errStr,
+	})
+}
+
 func (h *Handler) GetOrders(c *gin.Context) {
 	clientID, _ := strconv.Atoi(c.Query("client_id"))
 	orgID, _ := strconv.Atoi(c.Query("org_id"))
@@ -301,7 +314,7 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 	orderID, err := h.service.CreateOrder(&req, clientID, userID, token)
 	if err != nil {
 		log.Printf("[Error] CreateOrder failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -328,7 +341,7 @@ func (h *Handler) UpdateOrder(c *gin.Context) {
 	token := extractToken(c)
 	if err := h.service.UpdateOrder(id, &req, token); err != nil {
 		log.Printf("[Error] UpdateOrder failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -348,7 +361,7 @@ func (h *Handler) DeleteOrder(c *gin.Context) {
 	token := extractToken(c)
 	if err := h.service.DeleteOrder(id, token); err != nil {
 		log.Printf("[Error] DeleteOrder failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -377,7 +390,7 @@ func (h *Handler) CreateOrderLine(c *gin.Context) {
 	lineID, err := h.service.CreateOrderLine(orderID, &req, clientID, token)
 	if err != nil {
 		log.Printf("[Error] CreateOrderLine failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -410,7 +423,7 @@ func (h *Handler) UpdateOrderLine(c *gin.Context) {
 	token := extractToken(c)
 	if err := h.service.UpdateOrderLine(orderID, lineID, &req, token); err != nil {
 		log.Printf("[Error] UpdateOrderLine failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -436,7 +449,7 @@ func (h *Handler) DeleteOrderLine(c *gin.Context) {
 	token := extractToken(c)
 	if err := h.service.DeleteOrderLine(orderID, lineID, token); err != nil {
 		log.Printf("[Error] DeleteOrderLine failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -464,7 +477,7 @@ func (h *Handler) ProcessOrder(c *gin.Context) {
 	token := extractToken(c)
 	if err := h.service.ProcessOrder(id, payload.DocAction, token); err != nil {
 		log.Printf("[Error] ProcessOrder failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -479,7 +492,7 @@ func (h *Handler) GetAttachments(c *gin.Context) {
 
 	atts, err := h.service.GetAttachments(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -507,7 +520,7 @@ func (h *Handler) UploadAttachment(c *gin.Context) {
 
 	res, err := h.service.UploadAttachment(token, id, header.Filename, fileBytes)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -538,7 +551,7 @@ func (h *Handler) DeleteAttachment(c *gin.Context) {
 	token := extractToken(c)
 
 	if err := h.service.DeleteAttachment(token, id, fileName); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -553,7 +566,7 @@ func (h *Handler) GetChat(c *gin.Context) {
 
 	chat, err := h.service.GetChat(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 
@@ -579,7 +592,7 @@ func (h *Handler) SendChatMessage(c *gin.Context) {
 	}
 
 	if err := h.service.SendChatMessage(token, id, clientID, userID, message, fileData, fileName); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 

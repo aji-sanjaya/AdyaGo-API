@@ -352,8 +352,16 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       .catch((err) => {
         if (!isMounted) return;
         console.error('Failed to load purchase order details:', err);
-        const errMsg = err.response?.data?.message || err.message || 'Failed to load purchase order.';
-        if (err.response?.status === 401 || errMsg.includes('Token has expired')) {
+        const errMsg =
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to load purchase order.';
+        if (
+          err.response?.status === 401 ||
+          errMsg.includes('401') ||
+          errMsg.includes('Token has expired')
+        ) {
           setShowReauthModal(true);
         } else {
           setError(errMsg);
@@ -531,8 +539,16 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       }
     } catch (err) {
       console.error('Failed to save purchase order:', err);
-      const errMsg = err.response?.data?.message || err.message || 'Failed to process purchase order.';
-      if (err.response?.status === 401 || errMsg.includes('Token has expired')) {
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to process purchase order.';
+      if (
+        err.response?.status === 401 ||
+        errMsg.includes('401') ||
+        errMsg.includes('Token has expired')
+      ) {
         setShowReauthModal(true);
       } else {
         setError(errMsg);
@@ -573,8 +589,16 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       setLinePendingDelete(null);
     } catch (err) {
       console.error('Failed to delete order line:', err);
-      const errMsg = err.response?.data?.message || err.message || 'Failed to delete line.';
-      if (err.response?.status === 401 || errMsg.includes('Token has expired')) {
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to delete line.';
+      if (
+        err.response?.status === 401 ||
+        errMsg.includes('401') ||
+        errMsg.includes('Token has expired')
+      ) {
         setLinePendingDelete(null);
         setShowReauthModal(true);
       } else {
@@ -603,8 +627,16 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       }
     } catch (err) {
       console.error('Failed to execute document action:', err);
-      const errMsg = err.response?.data?.message || err.message || 'Failed to execute document action.';
-      if (err.response?.status === 401 || errMsg.includes('Token has expired')) {
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to execute document action.';
+      if (
+        err.response?.status === 401 ||
+        errMsg.includes('401') ||
+        errMsg.includes('Token has expired')
+      ) {
         setShowReauthModal(true);
       } else {
         setError(errMsg);
@@ -625,8 +657,16 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       navigate('/create-po', { replace: true });
     } catch (err) {
       console.error('Failed to delete order:', err);
-      const errMsg = err.response?.data?.message || err.message || 'Failed to delete purchase order.';
-      if (err.response?.status === 401 || errMsg.includes('Token has expired')) {
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to delete purchase order.';
+      if (
+        err.response?.status === 401 ||
+        errMsg.includes('401') ||
+        errMsg.includes('Token has expired')
+      ) {
         setShowDeleteDocModal(false);
         setShowReauthModal(true);
       } else {
