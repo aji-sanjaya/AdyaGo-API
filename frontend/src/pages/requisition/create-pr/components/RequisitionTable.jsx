@@ -1,0 +1,501 @@
+import React, { useState, useMemo } from 'react';
+import {
+  FileText, Eye, CheckCircle2, Clock, AlertCircle,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  Search, SlidersHorizontal, Plus, RotateCcw,
+  ArrowUpDown, ArrowUp, ArrowDown, Printer, Loader2
+} from 'lucide-react';
+
+export default function RequisitionTable({
+  requisitions = [],
+  loading,
+  total = 0,
+  page = 1,
+  limit = 10,
+  onPageChange,
+  onLimitChange,
+  sortBy: externalSortBy,
+  sortDir: externalSortDir,
+  onSortChange,
+  onViewDetail,
+  onPrintPreview,
+  printLoadingId,
+  search = '',
+  onSearchChange,
+  onOpenFilterModal,
+  activeFilterCount = 0,
+  onResetFilters,
+  onOpenCreate,
+  isDark,
+}) {
+  const getStatusBadge = (status) => {
+    const s = (status || '').toUpperCase();
+    if (s === 'CO' || s === 'CL') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+          <CheckCircle2 className="w-2.5 h-2.5" />
+          <span>{s === 'CL' ? 'Closed' : 'Completed'}</span>
+        </span>
+      );
+    }
+    if (s === 'IP' || s === 'AP') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+          <Clock className="w-2.5 h-2.5" />
+          <span>{s === 'AP' ? 'Approved' : 'In Progress'}</span>
+        </span>
+      );
+    }
+    if (s === 'DR' || s === 'IN') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30">
+          <span>Draft</span>
+        </span>
+      );
+    }
+    if (s === 'VO' || s === 'RE') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+          <span>{s === 'VO' ? 'Voided' : 'Reversed'}</span>
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-slate-500/20 text-slate-400">
+        {s}
+      </span>
+    );
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatIDR = (val) => {
+    if (!val || isNaN(val)) return 'IDR 0';
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
+  };
+
+  const totalPages = Math.ceil(total / limit) || 1;
+
+  // Sorting state: fallback internal state if not managed externally
+  const [internalSortField, setInternalSortField] = useState('datedoc');
+  const [internalSortDirection, setInternalSortDirection] = useState('desc');
+
+  const currentSortField = externalSortBy !== undefined ? externalSortBy : internalSortField;
+  const currentSortDirection = externalSortDir !== undefined ? externalSortDir : internalSortDirection;
+
+  const handleSort = (field) => {
+    const nextDir = (currentSortField === field && currentSortDirection === 'asc') ? 'desc' : 'asc';
+    if (onSortChange) {
+      onSortChange(field, nextDir);
+    } else {
+      setInternalSortField(field);
+      setInternalSortDirection(nextDir);
+    }
+  };
+
+  const displayedRequisitions = useMemo(() => {
+    // If external sort is handled server-side, use raw requisitions
+    if (onSortChange) {
+      return requisitions;
+    }
+    if (!requisitions || requisitions.length === 0) return [];
+    if (!currentSortField) return requisitions;
+
+    return [...requisitions].sort((a, b) => {
+      let aVal = a[currentSortField];
+      let bVal = b[currentSortField];
+
+      if (currentSortField === 'datedoc') {
+        aVal = new Date(aVal || 0).getTime();
+        bVal = new Date(bVal || 0).getTime();
+      } else if (currentSortField === 'totallines') {
+        aVal = Number(aVal) || 0;
+        bVal = Number(bVal) || 0;
+      } else {
+        aVal = (aVal || '').toString().toLowerCase();
+        bVal = (bVal || '').toString().toLowerCase();
+      }
+
+      if (aVal < bVal) return currentSortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return currentSortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [requisitions, currentSortField, currentSortDirection, onSortChange]);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (page >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', page - 1, page, page + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
+
+  const renderSortHeader = (label, field, align = 'left') => {
+    const isActive = currentSortField === field;
+    return (
+      <th
+        onClick={() => handleSort(field)}
+        className={`px-5 py-3.5 font-semibold cursor-pointer select-none transition-colors group ${
+          align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left'
+        } ${
+          isActive
+            ? isDark
+              ? 'text-cyan-400 bg-cyan-950/20'
+              : 'text-indigo-600 bg-indigo-50/50'
+            : isDark
+            ? 'hover:text-slate-200'
+            : 'hover:text-slate-800'
+        }`}
+      >
+        <div
+          className={`inline-flex items-center gap-1.5 ${
+            align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : ''
+          }`}
+        >
+          <span>{label}</span>
+          {isActive ? (
+            currentSortDirection === 'asc' ? (
+              <ArrowUp className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+            ) : (
+              <ArrowDown className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+            )
+          ) : (
+            <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-30 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+          )}
+        </div>
+      </th>
+    );
+  };
+
+  return (
+    <div
+      className={`rounded-2xl sm:rounded-3xl border transition-all duration-300 overflow-hidden w-full min-w-0 max-w-full ${
+        isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+      }`}
+    >
+      <div className="p-3.5 sm:p-5 border-b border-slate-800/60 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        {/* Title area */}
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center flex-shrink-0">
+            <FileText className="w-4 h-4" />
+          </div>
+          <h3 className={`text-sm sm:text-base font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            Requisition Documents
+          </h3>
+        </div>
+
+        {/* Search, Filter, and Action Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 flex-1 md:justify-end">
+          {/* Search Box */}
+          <div className="relative w-full sm:min-w-[220px] md:min-w-[260px] sm:max-w-xs md:max-w-sm flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              placeholder="Search document no, description..."
+              className={`w-full pl-9 pr-3.5 py-2 rounded-xl sm:rounded-2xl text-xs font-mono border outline-none transition ${
+                isDark
+                  ? 'bg-slate-950/70 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/60'
+                  : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500'
+              }`}
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              type="button"
+              onClick={onOpenFilterModal}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl sm:rounded-2xl border text-xs font-mono font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeFilterCount > 0
+                  ? isDark
+                    ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                    : 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                  : isDark
+                  ? 'bg-slate-950/70 hover:bg-slate-800 text-slate-300 border-slate-800'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>Filter</span>
+              {activeFilterCount > 0 && (
+                <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold bg-cyan-500 text-slate-950">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            {activeFilterCount > 0 && onResetFilters && (
+              <button
+                type="button"
+                onClick={onResetFilters}
+                title="Reset active filters"
+                className={`flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl sm:rounded-2xl border text-xs font-mono transition cursor-pointer ${
+                  isDark
+                    ? 'border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 bg-slate-950/50'
+                    : 'border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-300 bg-white'
+                }`}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Reset</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onOpenCreate}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-mono font-bold shadow-md shadow-indigo-500/20 transition cursor-pointer whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4 flex-shrink-0" />
+              <span>New Requisition</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto w-full max-w-full touch-pan-x">
+        <table className="w-full text-left text-xs min-w-[540px]">
+          <thead>
+            <tr
+              className={`border-b text-[10px] font-mono uppercase tracking-wider ${
+                isDark ? 'border-slate-800 text-slate-400 bg-slate-950/40' : 'border-slate-200 text-slate-500 bg-slate-50/70'
+              }`}
+            >
+              <th className="px-4 py-3.5 font-semibold text-center w-24">Action</th>
+              {renderSortHeader('Document No', 'documentno')}
+              {renderSortHeader('Date Doc', 'datedoc')}
+              {renderSortHeader('Cost Center', 'cost_center_name')}
+              {renderSortHeader('Description', 'description')}
+              {renderSortHeader('Status', 'docstatus', 'right')}
+            </tr>
+          </thead>
+          <tbody className={`divide-y ${isDark ? 'divide-slate-800/60' : 'divide-slate-100'}`}>
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="py-12 text-center text-slate-500 font-mono">
+                  Loading requisition documents...
+                </td>
+              </tr>
+            ) : displayedRequisitions.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-12 text-center text-slate-500 font-mono">
+                  No purchase requisitions found matching current filters.
+                </td>
+              </tr>
+            ) : (
+              displayedRequisitions.map((req) => (
+                <tr
+                  key={req.id}
+                  className={`transition-colors ${
+                    isDark ? 'hover:bg-slate-800/40' : 'hover:bg-[rgb(238_242_255_/_0.7)]'
+                  }`}
+                >
+                  {/* Action (Far Left) */}
+                  <td className="px-4 py-2 text-center whitespace-nowrap">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onViewDetail(req.id)}
+                        className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                          isDark
+                            ? 'bg-slate-800/80 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border-slate-700/80 hover:border-cyan-500/40'
+                            : 'bg-white hover:bg-slate-100 text-indigo-600 hover:text-indigo-700 border-slate-200 shadow-sm'
+                        }`}
+                        title="View Requisition Details"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onPrintPreview?.(req)}
+                        disabled={printLoadingId === req.id}
+                        className={`p-1.5 rounded-lg border transition cursor-pointer disabled:opacity-50 ${
+                          isDark
+                            ? 'bg-slate-800/80 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border-slate-700/80 hover:border-amber-500/40'
+                            : 'bg-white hover:bg-slate-100 text-amber-600 hover:text-amber-700 border-slate-200 shadow-sm'
+                        }`}
+                        title="Print Voucher PDF Preview"
+                      >
+                        {printLoadingId === req.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                        ) : (
+                          <Printer className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </td>
+
+                  {/* Document No */}
+                  <td className="px-5 py-2 font-mono font-bold text-blue-500 dark:text-cyan-400">
+                    <button
+                      type="button"
+                      onClick={() => onViewDetail(req.id)}
+                      className="hover:underline text-left cursor-pointer transition-colors"
+                      title="View requisition details"
+                    >
+                      {req.documentno}
+                    </button>
+                  </td>
+
+                  {/* Date Doc */}
+                  <td className="px-5 py-2 font-mono text-slate-400">
+                    {formatDate(req.datedoc)}
+                  </td>
+
+                  {/* Cost Center */}
+                  <td className="px-5 py-2 font-mono">
+                    <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold">
+                      {req.cost_center_name || '-'}
+                    </span>
+                  </td>
+
+                  {/* Description */}
+                  <td className="px-5 py-2 max-w-[220px] truncate font-mono text-slate-400">
+                    {req.description || '-'}
+                  </td>
+
+                  {/* Status */}
+                  <td className="px-5 py-2 text-right">
+                    {getStatusBadge(req.docstatus)}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination Footer */}
+      <div className={`p-3.5 sm:p-4 border-t flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-mono w-full ${
+        isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'
+      }`}>
+        <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-4 w-full md:w-auto">
+          <div className="text-[11px] sm:text-xs">
+            Showing <span className={`font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+              {total === 0 ? 0 : (page - 1) * limit + 1}
+            </span> to <span className={`font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+              {Math.min(page * limit, total)}
+            </span> of <span className={`font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+              {total.toLocaleString()}
+            </span> records
+          </div>
+
+          {onLimitChange && (
+            <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+              <span className="text-[10px] sm:text-[11px] text-slate-400">Rows:</span>
+              <select
+                value={limit}
+                onChange={(e) => onLimitChange(Number(e.target.value))}
+                className={`px-2 py-1 rounded-xl text-xs font-mono border outline-none transition cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-slate-200 focus:border-cyan-500/50'
+                    : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-indigo-500'
+                }`}
+              >
+                {[10, 15, 25, 50, 100].map((sz) => (
+                  <option key={sz} value={sz} className={isDark ? 'bg-slate-900 text-slate-200' : 'bg-white text-slate-800'}>
+                    {sz}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Page Navigators */}
+        <div className="flex items-center justify-center sm:justify-end gap-1 sm:gap-1.5 flex-wrap w-full md:w-auto">
+          {/* First Page */}
+          <button
+            onClick={() => onPageChange(1)}
+            disabled={page <= 1 || loading}
+            title="First Page"
+            className={`p-1.5 sm:p-2 rounded-xl border transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+              isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <ChevronsLeft className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Previous Page */}
+          <button
+            onClick={() => onPageChange(page - 1)}
+            disabled={page <= 1 || loading}
+            title="Previous Page"
+            className={`p-1.5 sm:p-2 rounded-xl border transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+              isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Page numbers */}
+          {getPageNumbers().map((p, idx) => (
+            p === '...' ? (
+              <span key={`ellipsis-${idx}`} className="px-1.5 py-1 text-slate-500 font-mono select-none text-xs">...</span>
+            ) : (
+              <button
+                key={`page-${p}`}
+                onClick={() => onPageChange(p)}
+                disabled={loading}
+                className={`min-w-[28px] sm:min-w-[32px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-xl font-bold font-mono text-[11px] sm:text-xs transition cursor-pointer border ${
+                  p === page
+                    ? isDark
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-sm'
+                      : 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
+                    : isDark
+                    ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {p}
+              </button>
+            )
+          ))}
+
+          {/* Next Page */}
+          <button
+            onClick={() => onPageChange(page + 1)}
+            disabled={page >= totalPages || loading}
+            title="Next Page"
+            className={`p-1.5 sm:p-2 rounded-xl border transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+              isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Last Page */}
+          <button
+            onClick={() => onPageChange(totalPages)}
+            disabled={page >= totalPages || loading}
+            title="Last Page"
+            className={`p-1.5 sm:p-2 rounded-xl border transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+              isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <ChevronsRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
