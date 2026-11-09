@@ -267,7 +267,7 @@ export default function OrderTable({
               {renderSortHeader('Document No', 'documentno')}
               {renderSortHeader('Date Ordered', 'dateordered')}
               <th className="px-4 py-3.5 font-semibold">Vendor / Supplier</th>
-              <th className="px-4 py-3.5 font-semibold">Warehouse & Org</th>
+              <th className="px-4 py-3.5 font-semibold">Created By</th>
               {renderSortHeader('Grand Total', 'grandtotal', 'right')}
               {renderSortHeader('Status', 'docstatus', 'center')}
             </tr>
@@ -368,13 +368,10 @@ export default function OrderTable({
                     )}
                   </td>
 
-                  {/* Warehouse & Org */}
-                  <td className="px-4 py-2">
-                    <span className="block font-medium truncate max-w-[180px] text-slate-800 dark:text-slate-200">
-                      {po.warehouse_name || '-'}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-500 block truncate max-w-[180px]">
-                      {po.org_name}
+                  {/* Created By */}
+                  <td className="px-4 py-2 font-mono whitespace-nowrap text-slate-500">
+                    <span className="block truncate max-w-[180px]">
+                      {po.createdby_name || '-'}
                     </span>
                   </td>
 
