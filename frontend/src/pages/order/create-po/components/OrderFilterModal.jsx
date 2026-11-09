@@ -173,12 +173,6 @@ export default function OrderFilterModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* LEFT COLUMN: Description, Business Partner, Cost Center */}
             <div className="space-y-4">
-              <div className="border-b border-slate-800/40 pb-1.5">
-                <span className="text-[11px] font-mono uppercase tracking-wider font-bold text-cyan-400">
-                  Document Details
-                </span>
-              </div>
-
               {/* 1. Description */}
               <div>
                 <label className="block text-[11px] font-mono uppercase font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
@@ -233,39 +227,33 @@ export default function OrderFilterModal({
               </div>
             </div>
 
-            {/* RIGHT COLUMN: Date Ordered (Range Date), Created By, Status */}
+            {/* RIGHT COLUMN: Date Ordered, Created By, Status */}
             <div className="space-y-4">
-              <div className="border-b border-slate-800/40 pb-1.5">
-                <span className="text-[11px] font-mono uppercase tracking-wider font-bold text-indigo-400">
-                  Timeline & Status
-                </span>
-              </div>
-
-              {/* 1. Date Ordered (Range Date) */}
-              <div>
-                <label className="block text-[11px] font-mono uppercase font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Date Ordered (Range Date)</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <span className="text-[10px] font-mono text-slate-500 mb-1 block">From</span>
-                    <CustomDatePicker
-                      value={localDateStart}
-                      onChange={setLocalDateStart}
-                      placeholder="Start Date"
-                      isDark={isDark}
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-mono text-slate-500 mb-1 block">To</span>
-                    <CustomDatePicker
-                      value={localDateEnd}
-                      onChange={setLocalDateEnd}
-                      placeholder="End Date"
-                      isDark={isDark}
-                    />
-                  </div>
+              {/* 1. Date Ordered (Range Date inputs) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-mono uppercase font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Date Ordered From</span>
+                  </label>
+                  <CustomDatePicker
+                    value={localDateStart}
+                    onChange={setLocalDateStart}
+                    placeholder="Start Date"
+                    isDark={isDark}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-mono uppercase font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Date Ordered To</span>
+                  </label>
+                  <CustomDatePicker
+                    value={localDateEnd}
+                    onChange={setLocalDateEnd}
+                    placeholder="End Date"
+                    isDark={isDark}
+                  />
                 </div>
               </div>
 
