@@ -75,6 +75,14 @@ func (h *Handler) GetOrders(c *gin.Context) {
 	status := c.Query("status")
 	costCenterID, _ := strconv.Atoi(c.Query("cost_center_id"))
 	bpartnerID, _ := strconv.Atoi(c.Query("c_bpartner_id"))
+	if bpartnerID == 0 {
+		bpartnerID, _ = strconv.Atoi(c.Query("bpartner_id"))
+	}
+	createdByID, _ := strconv.Atoi(c.Query("created_by"))
+	if createdByID == 0 {
+		createdByID, _ = strconv.Atoi(c.Query("createdby"))
+	}
+	description := c.Query("description")
 	dateStart := c.Query("date_start")
 	dateEnd := c.Query("date_end")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -82,7 +90,7 @@ func (h *Handler) GetOrders(c *gin.Context) {
 	sortBy := c.Query("sort_by")
 	sortDir := c.Query("sort_dir")
 
-	resp, err := h.service.GetOrders(clientID, orgID, search, status, costCenterID, bpartnerID, dateStart, dateEnd, page, limit, sortBy, sortDir)
+	resp, err := h.service.GetOrders(clientID, orgID, search, status, costCenterID, bpartnerID, createdByID, description, dateStart, dateEnd, page, limit, sortBy, sortDir)
 	if err != nil {
 		log.Printf("[Error] GetOrders failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

@@ -91,7 +91,7 @@ func getIDFromResult(res map[string]interface{}) int {
 }
 
 // 1. Get Orders List with Stats & Pagination
-func (s *Service) GetOrders(clientID, orgID int, search, status string, costCenterID, bpartnerID int, dateStart, dateEnd string, page, limit int, sortBy, sortDir string) (*OrderListResponse, error) {
+func (s *Service) GetOrders(clientID, orgID int, search, status string, costCenterID, bpartnerID, createdByID int, description, dateStart, dateEnd string, page, limit int, sortBy, sortDir string) (*OrderListResponse, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -166,6 +166,14 @@ func (s *Service) GetOrders(clientID, orgID int, search, status string, costCent
 	if bpartnerID > 0 {
 		baseQuery += " AND o.c_bpartner_id = ?"
 		args = append(args, bpartnerID)
+	}
+	if createdByID > 0 {
+		baseQuery += " AND o.createdby = ?"
+		args = append(args, createdByID)
+	}
+	if strings.TrimSpace(description) != "" {
+		baseQuery += " AND o.description ILIKE ?"
+		args = append(args, "%"+strings.TrimSpace(description)+"%")
 	}
 	if strings.TrimSpace(dateStart) != "" {
 		baseQuery += " AND o.dateordered >= ?"
@@ -246,6 +254,8 @@ func (s *Service) GetMasterOptions(clientID, orgID int, roleID int) (*MasterOpti
 		Projects:      []SelectOption{},
 		CostCenters:   []SelectOption{},
 		Approvers:     []SelectOption{},
+		Users:         []SelectOption{},
+		Vendors:       []VendorOption{},
 	}
 
 	// 1. Organizations
@@ -360,6 +370,25 @@ func (s *Service) GetMasterOptions(clientID, orgID int, roleID int) (*MasterOpti
 		ORDER BY u.name
 	`
 	_ = s.db.DB.Raw(usersQuery, clientID).Scan(&resp.Approvers).Error
+
+	// 11. Users (Creators)
+	userQuery := `
+		SELECT DISTINCT u.ad_user_id AS id, u.name AS text
+		FROM ad_user u
+		WHERE u.isactive = 'Y' AND u.ad_client_id = ?
+		ORDER BY u.name
+	`
+	_ = s.db.DB.Raw(userQuery, clientID).Scan(&resp.Users).Error
+
+	// 12. Vendors (Business Partners)
+	vendorQuery := `
+		SELECT c_bpartner_id AS id, COALESCE(value || ' - ' || name, name) AS text
+		FROM c_bpartner
+		WHERE isactive = 'Y' AND isvendor = 'Y' AND ad_client_id = ?
+		ORDER BY name
+		LIMIT 200
+	`
+	_ = s.db.DB.Raw(vendorQuery, clientID).Scan(&resp.Vendors).Error
 
 	return resp, nil
 }

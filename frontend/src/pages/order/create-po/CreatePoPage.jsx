@@ -51,10 +51,15 @@ export default function CreatePoPage() {
   // Filters State initialized from localStorage cache
   const savedFilters = useMemo(() => loadSavedFilters(), []);
   const [search, setSearch] = useState(savedFilters.search || '');
-  const [status, setStatus] = useState(savedFilters.status || '');
+  const [description, setDescription] = useState(savedFilters.description || '');
+  const [bpartnerId, setBpartnerId] = useState(savedFilters.bpartnerId || '');
   const [costCenterId, setCostCenterId] = useState(savedFilters.costCenterId || '');
   const [dateStart, setDateStart] = useState(savedFilters.dateStart || '');
   const [dateEnd, setDateEnd] = useState(savedFilters.dateEnd || '');
+  const [createdBy, setCreatedBy] = useState(savedFilters.createdBy || '');
+  const [status, setStatus] = useState(savedFilters.status || '');
+  const [vendorsList, setVendorsList] = useState([]);
+  const [usersList, setUsersList] = useState([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(savedFilters.limit || 10);
   const [sortBy, setSortBy] = useState(savedFilters.sortBy || 'dateordered');
@@ -72,14 +77,34 @@ export default function CreatePoPage() {
   const userId = session?.user?.id || session?.user?.userId || 0;
 
   const activeFilterCount =
-    (status ? 1 : 0) + (costCenterId ? 1 : 0) + (dateStart ? 1 : 0) + (dateEnd ? 1 : 0);
+    (status ? 1 : 0) +
+    (costCenterId ? 1 : 0) +
+    (bpartnerId ? 1 : 0) +
+    (createdBy ? 1 : 0) +
+    (description.trim() ? 1 : 0) +
+    (dateStart ? 1 : 0) +
+    (dateEnd ? 1 : 0);
 
   // Load Master Options once
   useEffect(() => {
     orderApi
       .getMasterOptions(clientId, userId, session?.token)
       .then((res) => {
-        setOptions(res.data);
+        const optData = res.data || {};
+        setOptions(optData);
+        if (optData.vendors && optData.vendors.length > 0) {
+          setVendorsList(optData.vendors);
+        } else {
+          orderApi
+            .getVendors({ client_id: clientId, limit: 200 })
+            .then((vRes) => setVendorsList(vRes.data || []))
+            .catch(() => {});
+        }
+        if (optData.users && optData.users.length > 0) {
+          setUsersList(optData.users);
+        } else if (optData.approvers) {
+          setUsersList(optData.approvers);
+        }
       })
       .catch((err) => {
         console.error('Failed to load master options:', err);
@@ -100,6 +125,9 @@ export default function CreatePoPage() {
       sort_dir: sortDir,
     };
     if (search.trim()) params.search = search.trim();
+    if (description.trim()) params.description = description.trim();
+    if (bpartnerId) params.c_bpartner_id = bpartnerId;
+    if (createdBy) params.created_by = createdBy;
     if (status) params.status = status;
     if (costCenterId) params.cost_center_id = costCenterId;
     if (dateStart) params.date_start = dateStart;
@@ -124,7 +152,7 @@ export default function CreatePoPage() {
 
   useEffect(() => {
     fetchList();
-  }, [clientId, orgId, page, limit, status, costCenterId, dateStart, dateEnd, sortBy, sortDir]);
+  }, [clientId, orgId, page, limit, status, costCenterId, bpartnerId, createdBy, description, dateStart, dateEnd, sortBy, sortDir]);
 
   // Debounced Search
   useEffect(() => {
@@ -142,6 +170,9 @@ export default function CreatePoPage() {
       const hasActive = Boolean(
         status ||
           costCenterId ||
+          bpartnerId ||
+          createdBy ||
+          description.trim() ||
           dateStart ||
           dateEnd ||
           search.trim() ||
@@ -156,6 +187,9 @@ export default function CreatePoPage() {
           JSON.stringify({
             status,
             costCenterId,
+            bpartnerId,
+            createdBy,
+            description,
             dateStart,
             dateEnd,
             search,
@@ -170,11 +204,14 @@ export default function CreatePoPage() {
     } catch (err) {
       console.error('Failed to save filter cache:', err);
     }
-  }, [status, costCenterId, dateStart, dateEnd, search, limit, sortBy, sortDir]);
+  }, [status, costCenterId, bpartnerId, createdBy, description, dateStart, dateEnd, search, limit, sortBy, sortDir]);
 
   const handleResetFilters = () => {
     setStatus('');
     setCostCenterId('');
+    setBpartnerId('');
+    setCreatedBy('');
+    setDescription('');
     setDateStart('');
     setDateEnd('');
     setSearch('');
@@ -187,10 +224,13 @@ export default function CreatePoPage() {
   };
 
   const handleApplyFilterModal = (filters) => {
-    setStatus(filters.status);
-    setCostCenterId(filters.costCenterId);
-    setDateStart(filters.dateStart);
-    setDateEnd(filters.dateEnd);
+    setDescription(filters.description || '');
+    setBpartnerId(filters.bpartnerId || '');
+    setCostCenterId(filters.costCenterId || '');
+    setDateStart(filters.dateStart || '');
+    setDateEnd(filters.dateEnd || '');
+    setCreatedBy(filters.createdBy || '');
+    setStatus(filters.status || '');
     setPage(1);
   };
 
@@ -285,11 +325,16 @@ export default function CreatePoPage() {
           <OrderFilterModal
             isOpen={filterModalOpen}
             onClose={() => setFilterModalOpen(false)}
-            status={status}
+            description={description}
+            bpartnerId={bpartnerId}
             costCenterId={costCenterId}
             dateStart={dateStart}
             dateEnd={dateEnd}
-            costCenters={options?.costCenters || []}
+            createdBy={createdBy}
+            status={status}
+            costCenters={options?.cost_centers || options?.costCenters || []}
+            vendors={vendorsList}
+            users={usersList}
             onApply={handleApplyFilterModal}
             onReset={handleResetFilters}
             isDark={isDark}

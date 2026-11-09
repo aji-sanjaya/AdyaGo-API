@@ -147,6 +147,8 @@ type MasterOptionsResponse struct {
 	Projects      []SelectOption `json:"projects"`
 	CostCenters   []SelectOption `json:"cost_centers"`
 	Approvers     []SelectOption `json:"approvers"`
+	Users         []SelectOption `json:"users"`
+	Vendors       []VendorOption `json:"vendors"`
 }
 
 type VendorOption struct {
