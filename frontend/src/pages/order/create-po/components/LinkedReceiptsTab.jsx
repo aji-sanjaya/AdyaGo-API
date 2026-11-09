@@ -202,3 +202,4 @@ export default function LinkedReceiptsTab({ orderId, isDark, onTotalCountChange 
     </div>
   );
 }
+

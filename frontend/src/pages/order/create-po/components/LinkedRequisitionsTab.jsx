@@ -302,3 +302,4 @@ export default function LinkedRequisitionsTab({ orderId, isDark, onTotalCountCha
     </div>
   );
 }
+

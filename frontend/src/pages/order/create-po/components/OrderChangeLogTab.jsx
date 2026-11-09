@@ -298,3 +298,4 @@ export default function OrderChangeLogTab({ orderId, isDark, onTotalLogsChange }
     </div>
   );
 }
+

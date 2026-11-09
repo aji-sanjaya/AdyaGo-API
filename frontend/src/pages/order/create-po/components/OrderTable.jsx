@@ -1,23 +1,75 @@
-import React from 'react';
-import { Eye, Printer, ArrowUpDown, ChevronLeft, ChevronRight, FileText, ShoppingCart } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import {
+  Eye,
+  Printer,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  ShoppingCart,
+  Search,
+  SlidersHorizontal,
+  RotateCcw,
+  Plus,
+  Loader2,
+} from 'lucide-react';
 
 export default function OrderTable({
-  orders,
-  loading,
-  isDark,
-  page,
-  limit,
-  total,
-  sortBy,
-  sortDir,
-  onSort,
+  orders = [],
+  loading = false,
+  total = 0,
+  page = 1,
+  limit = 10,
   onPageChange,
   onLimitChange,
+  sortBy: externalSortBy,
+  sortDir: externalSortDir,
+  onSortChange,
   onView,
   onPrint,
   printLoadingId,
+  search = '',
+  onSearchChange,
+  onOpenFilterModal,
+  activeFilterCount = 0,
+  onResetFilters,
+  onOpenCreate,
+  isDark = true,
 }) {
-  const totalPages = Math.ceil(total / limit) || 1;
+  const [internalSortField, setInternalSortField] = useState('dateordered');
+  const [internalSortDirection, setInternalSortDirection] = useState('desc');
+
+  const currentSortField = externalSortBy !== undefined ? externalSortBy : internalSortField;
+  const currentSortDirection = externalSortDir !== undefined ? externalSortDir : internalSortDirection;
+
+  const handleSort = (field) => {
+    const nextDir = currentSortField === field && currentSortDirection === 'asc' ? 'desc' : 'asc';
+    if (onSortChange) {
+      onSortChange(field, nextDir);
+    } else {
+      setInternalSortField(field);
+      setInternalSortDirection(nextDir);
+    }
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (page >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', page - 1, page, page + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
 
   const getStatusBadge = (status, label) => {
     switch (status) {
@@ -78,134 +130,224 @@ export default function OrderTable({
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
+      maximumFractionDigits: 0,
     }).format(num);
   };
 
+  const renderSortHeader = (label, field, align = 'left') => {
+    const isSorted = currentSortField === field;
+    return (
+      <th
+        onClick={() => handleSort(field)}
+        className={`px-4 py-3.5 font-semibold cursor-pointer select-none transition-colors ${
+          align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'
+        } ${isSorted ? (isDark ? 'text-cyan-400' : 'text-indigo-600') : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+      >
+        <div
+          className={`inline-flex items-center gap-1.5 ${
+            align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'
+          }`}
+        >
+          <span>{label}</span>
+          {isSorted ? (
+            currentSortDirection === 'asc' ? (
+              <ArrowUp className="w-3 h-3 text-cyan-400" />
+            ) : (
+              <ArrowDown className="w-3 h-3 text-cyan-400" />
+            )
+          ) : (
+            <ArrowUpDown className="w-3 h-3 opacity-40" />
+          )}
+        </div>
+      </th>
+    );
+  };
+
+  const startEntry = total === 0 ? 0 : (page - 1) * limit + 1;
+  const endEntry = Math.min(page * limit, total);
+
   return (
     <div
-      className={`rounded-3xl border overflow-hidden transition-all duration-300 ${
+      className={`rounded-2xl sm:rounded-3xl border transition-all duration-300 overflow-hidden w-full min-w-0 max-w-full ${
         isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
       }`}
     >
-      <div className="overflow-x-auto min-h-[300px]">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr
-              className={`border-b text-[11px] font-mono uppercase tracking-wider ${
-                isDark ? 'border-slate-800 bg-slate-900/90 text-slate-400' : 'border-slate-100 bg-slate-50 text-slate-600'
+      {/* Integrated Card Header */}
+      <div className="p-3.5 sm:p-5 border-b border-slate-800/60 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        {/* Title area */}
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center flex-shrink-0">
+            <ShoppingCart className="w-4 h-4" />
+          </div>
+          <h3 className={`text-sm sm:text-base font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            Purchase Orders
+          </h3>
+        </div>
+
+        {/* Search, Filter, and Action Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 flex-1 md:justify-end">
+          {/* Search Box */}
+          <div className="relative w-full sm:min-w-[220px] md:min-w-[260px] sm:max-w-xs md:max-w-sm flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              placeholder="Search document no, supplier, desc..."
+              className={`w-full pl-9 pr-3.5 py-2 rounded-xl sm:rounded-2xl text-xs font-mono border outline-none transition ${
+                isDark
+                  ? 'bg-slate-950/70 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/60'
+                  : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500'
+              }`}
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              type="button"
+              onClick={onOpenFilterModal}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl sm:rounded-2xl border text-xs font-mono font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeFilterCount > 0
+                  ? isDark
+                    ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                    : 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                  : isDark
+                  ? 'bg-slate-950/70 hover:bg-slate-800 text-slate-300 border-slate-800'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
               }`}
             >
-              <th className="py-3.5 px-4 font-bold text-center w-24">Actions</th>
-              <th
-                onClick={() => onSort('documentno')}
-                className="py-3.5 px-4 font-bold cursor-pointer hover:text-cyan-400 transition-colors select-none"
+              <SlidersHorizontal className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>Filter</span>
+              {activeFilterCount > 0 && (
+                <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold bg-cyan-500 text-slate-950">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            {activeFilterCount > 0 && onResetFilters && (
+              <button
+                type="button"
+                onClick={onResetFilters}
+                title="Reset active filters"
+                className={`flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl sm:rounded-2xl border text-xs font-mono transition cursor-pointer ${
+                  isDark
+                    ? 'border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 bg-slate-950/50'
+                    : 'border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-300 bg-white'
+                }`}
               >
-                <div className="flex items-center space-x-1.5">
-                  <span>Document No</span>
-                  <ArrowUpDown className="w-3 h-3 opacity-60" />
-                </div>
-              </th>
-              <th
-                onClick={() => onSort('dateordered')}
-                className="py-3.5 px-4 font-bold cursor-pointer hover:text-cyan-400 transition-colors select-none"
-              >
-                <div className="flex items-center space-x-1.5">
-                  <span>Date Ordered</span>
-                  <ArrowUpDown className="w-3 h-3 opacity-60" />
-                </div>
-              </th>
-              <th className="py-3.5 px-4 font-bold">Vendor / Supplier</th>
-              <th className="py-3.5 px-4 font-bold">Warehouse & Org</th>
-              <th
-                onClick={() => onSort('grandtotal')}
-                className="py-3.5 px-4 font-bold cursor-pointer hover:text-cyan-400 transition-colors select-none text-right"
-              >
-                <div className="flex items-center justify-end space-x-1.5">
-                  <span>Grand Total</span>
-                  <ArrowUpDown className="w-3 h-3 opacity-60" />
-                </div>
-              </th>
-              <th
-                onClick={() => onSort('docstatus')}
-                className="py-3.5 px-4 font-bold cursor-pointer hover:text-cyan-400 transition-colors select-none text-center"
-              >
-                <div className="flex items-center justify-center space-x-1.5">
-                  <span>Status</span>
-                  <ArrowUpDown className="w-3 h-3 opacity-60" />
-                </div>
-              </th>
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Reset</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onOpenCreate}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-mono font-bold shadow-md shadow-indigo-500/20 transition cursor-pointer whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4 flex-shrink-0" />
+              <span>New Order</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Table Body */}
+      <div className="overflow-x-auto w-full max-w-full touch-pan-x min-h-[300px]">
+        <table className="w-full text-left text-xs min-w-[700px] border-collapse">
+          <thead>
+            <tr
+              className={`border-b text-[10px] font-mono uppercase tracking-wider ${
+                isDark ? 'border-slate-800 text-slate-400 bg-slate-950/40' : 'border-slate-200 text-slate-500 bg-slate-50/70'
+              }`}
+            >
+              <th className="px-4 py-3.5 font-semibold text-center w-24">Action</th>
+              {renderSortHeader('Document No', 'documentno')}
+              {renderSortHeader('Date Ordered', 'dateordered')}
+              <th className="px-4 py-3.5 font-semibold">Vendor / Supplier</th>
+              <th className="px-4 py-3.5 font-semibold">Warehouse & Org</th>
+              {renderSortHeader('Grand Total', 'grandtotal', 'right')}
+              {renderSortHeader('Status', 'docstatus', 'center')}
             </tr>
           </thead>
-          <tbody className={`divide-y text-xs font-medium ${isDark ? 'divide-slate-800/60' : 'divide-slate-100'}`}>
+          <tbody className={`divide-y ${isDark ? 'divide-slate-800/60' : 'divide-slate-100'}`}>
             {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="animate-pulse">
-                  <td className="py-4 px-4 text-center"><div className="h-4 bg-slate-800 rounded w-16 mx-auto"></div></td>
-                  <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-28"></div></td>
-                  <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-24"></div></td>
-                  <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-36"></div></td>
-                  <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-32"></div></td>
-                  <td className="py-4 px-4 text-right"><div className="h-4 bg-slate-800 rounded w-24 ml-auto"></div></td>
-                  <td className="py-4 px-4 text-center"><div className="h-4 bg-slate-800 rounded w-20 mx-auto"></div></td>
-                </tr>
-              ))
+              <tr>
+                <td colSpan={7} className="py-12 text-center text-slate-500 font-mono">
+                  Loading purchase orders...
+                </td>
+              </tr>
             ) : orders.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-12 text-center text-slate-500 font-mono">
                   <ShoppingCart className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <span>No purchase orders found matching your criteria.</span>
+                  <span>No purchase orders found matching current filters.</span>
                 </td>
               </tr>
             ) : (
               orders.map((po) => (
                 <tr
                   key={po.c_order_id}
-                  className={`transition-colors group ${
-                    isDark ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-50 text-slate-700'
+                  className={`transition-colors ${
+                    isDark ? 'hover:bg-slate-800/40' : 'hover:bg-[rgb(238_242_255_/_0.7)]'
                   }`}
                 >
-                  <td className="py-3.5 px-4 text-center">
-                    <div className="flex items-center justify-center space-x-1.5">
+                  {/* Action (Far Left) */}
+                  <td className="px-4 py-2 text-center whitespace-nowrap">
+                    <div className="flex items-center justify-center gap-1.5">
                       <button
+                        type="button"
                         onClick={() => onView(po)}
-                        title="View & Edit"
-                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                        className={`p-1.5 rounded-lg border transition cursor-pointer ${
                           isDark
-                            ? 'bg-slate-800 hover:bg-slate-700 text-cyan-400'
-                            : 'bg-slate-100 hover:bg-slate-200 text-indigo-600'
+                            ? 'bg-slate-800/80 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border-slate-700/80 hover:border-cyan-500/40'
+                            : 'bg-white hover:bg-slate-100 text-indigo-600 hover:text-indigo-700 border-slate-200 shadow-sm'
                         }`}
+                        title="View & Edit Order Details"
                       >
-                        <Eye className="w-4 h-4" />
+                        <Eye className="w-3.5 h-3.5" />
                       </button>
+
                       <button
-                        onClick={() => onPrint(po)}
+                        type="button"
+                        onClick={() => onPrint?.(po)}
                         disabled={printLoadingId === po.c_order_id}
-                        title="Print Preview"
-                        className={`p-2 rounded-xl transition-all cursor-pointer ${
+                        className={`p-1.5 rounded-lg border transition cursor-pointer disabled:opacity-50 ${
                           isDark
-                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                            ? 'bg-slate-800/80 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border-slate-700/80 hover:border-amber-500/40'
+                            : 'bg-white hover:bg-slate-100 text-amber-600 hover:text-amber-700 border-slate-200 shadow-sm'
                         }`}
+                        title="Print Order PDF Preview"
                       >
-                        <Printer className="w-4 h-4" />
+                        {printLoadingId === po.c_order_id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                        ) : (
+                          <Printer className="w-3.5 h-3.5" />
+                        )}
                       </button>
                     </div>
                   </td>
-                  <td className="py-3.5 px-4 font-mono font-bold">
+
+                  {/* Document No */}
+                  <td className="px-4 py-2 font-mono font-bold text-blue-500 dark:text-cyan-400">
                     <button
+                      type="button"
                       onClick={() => onView(po)}
-                      className="text-cyan-400 hover:text-cyan-300 hover:underline transition-colors flex items-center space-x-1.5 cursor-pointer"
+                      className="hover:underline text-left cursor-pointer"
                     >
                       <span>{po.documentno}</span>
                     </button>
                     {po.description && (
-                      <span className="text-[10px] text-slate-500 block truncate max-w-xs mt-0.5">
+                      <span className="text-[10px] text-slate-500 block truncate max-w-xs mt-0.5 font-normal">
                         {po.description}
                       </span>
                     )}
                   </td>
-                  <td className="py-3.5 px-4 font-mono">
+
+                  {/* Date Ordered */}
+                  <td className="px-4 py-2 font-mono whitespace-nowrap text-slate-400">
                     <span>{formatDate(po.dateordered)}</span>
                     {po.datepromised && (
                       <span className="text-[10px] text-slate-500 block">
@@ -213,8 +355,10 @@ export default function OrderTable({
                       </span>
                     )}
                   </td>
-                  <td className="py-3.5 px-4">
-                    <span className="font-bold block truncate max-w-xs text-slate-200">
+
+                  {/* Vendor / Supplier */}
+                  <td className="px-4 py-2">
+                    <span className="font-bold block truncate max-w-xs text-slate-800 dark:text-slate-200">
                       {po.bpartner_name || '-'}
                     </span>
                     {po.bpartner_value && (
@@ -223,18 +367,24 @@ export default function OrderTable({
                       </span>
                     )}
                   </td>
-                  <td className="py-3.5 px-4">
-                    <span className="block font-medium truncate max-w-[180px]">
+
+                  {/* Warehouse & Org */}
+                  <td className="px-4 py-2">
+                    <span className="block font-medium truncate max-w-[180px] text-slate-800 dark:text-slate-200">
                       {po.warehouse_name || '-'}
                     </span>
                     <span className="text-[10px] font-mono text-slate-500 block truncate max-w-[180px]">
                       {po.org_name}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-200">
+
+                  {/* Grand Total */}
+                  <td className="px-4 py-2 text-right font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
                     {formatCurrency(po.grandtotal)}
                   </td>
-                  <td className="py-3.5 px-4 text-center">
+
+                  {/* Status */}
+                  <td className="px-4 py-2 text-center whitespace-nowrap">
                     {getStatusBadge(po.docstatus, po.status_label)}
                   </td>
                 </tr>
@@ -246,64 +396,88 @@ export default function OrderTable({
 
       {/* Pagination Footer */}
       <div
-        className={`px-6 py-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-xs ${
-          isDark ? 'border-slate-800 bg-slate-900/50 text-slate-400' : 'border-slate-100 bg-slate-50 text-slate-600'
+        className={`px-4 sm:px-6 py-3.5 border-t flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs ${
+          isDark ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50/70 text-slate-600'
         }`}
       >
-        <div className="flex items-center space-x-2">
-          <span>Rows per page:</span>
-          <select
-            value={limit}
-            onChange={(e) => onLimitChange(Number(e.target.value))}
-            className={`px-2.5 py-1 rounded-lg border text-xs outline-none ${
-              isDark
-                ? 'bg-slate-800 border-slate-700 text-slate-200'
-                : 'bg-white border-slate-200 text-slate-800'
-            }`}
-          >
-            {[10, 25, 50, 100].map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <span className="hidden sm:inline">|</span>
-          <span className="hidden sm:inline">
-            Showing {total === 0 ? 0 : (page - 1) * limit + 1} -{' '}
-            {Math.min(page * limit, total)} of {total.toLocaleString()} records
+        <div className="flex items-center gap-3">
+          <span>
+            Showing <strong className={isDark ? 'text-white' : 'text-slate-900'}>{startEntry}</strong> to{' '}
+            <strong className={isDark ? 'text-white' : 'text-slate-900'}>{endEntry}</strong> of{' '}
+            <strong className={isDark ? 'text-white' : 'text-slate-900'}>{total}</strong> orders
           </span>
+
+          <div className="flex items-center gap-1.5 ml-2">
+            <span className="text-[11px] text-slate-500 hidden sm:inline">Rows:</span>
+            <select
+              value={limit}
+              onChange={(e) => onLimitChange?.(Number(e.target.value))}
+              className={`px-2 py-1 rounded-lg border text-xs font-mono outline-none cursor-pointer ${
+                isDark
+                  ? 'bg-slate-900 border-slate-700 text-slate-200'
+                  : 'bg-white border-slate-200 text-slate-700'
+              }`}
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-2">
+        {/* Page Buttons */}
+        <div className="flex items-center gap-1">
           <button
-            onClick={() => onPageChange(page - 1)}
+            type="button"
+            onClick={() => onPageChange?.(page - 1)}
             disabled={page <= 1}
-            className={`p-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`p-1.5 rounded-lg border text-xs transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
               isDark
-                ? 'border-slate-700 hover:bg-slate-800 text-slate-300'
-                : 'border-slate-200 hover:bg-white text-slate-700'
+                ? 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-sm'
             }`}
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-3.5 h-3.5" />
           </button>
-          <span>
-            Page <strong className="text-cyan-400">{page}</strong> of{' '}
-            <strong>{totalPages}</strong>
-          </span>
+
+          {getPageNumbers().map((p, idx) =>
+            p === '...' ? (
+              <span key={`dots-${idx}`} className="px-2 py-1 text-slate-500">
+                ...
+              </span>
+            ) : (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onPageChange?.(p)}
+                className={`min-w-[28px] h-7 px-2 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+                  page === p
+                    ? 'bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-sm'
+                    : isDark
+                    ? 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                {p}
+              </button>
+            )
+          )}
+
           <button
-            onClick={() => onPageChange(page + 1)}
+            type="button"
+            onClick={() => onPageChange?.(page + 1)}
             disabled={page >= totalPages}
-            className={`p-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`p-1.5 rounded-lg border text-xs transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
               isDark
-                ? 'border-slate-700 hover:bg-slate-800 text-slate-300'
-                : 'border-slate-200 hover:bg-white text-slate-700'
+                ? 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-sm'
             }`}
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
     </div>
   );
 }
-

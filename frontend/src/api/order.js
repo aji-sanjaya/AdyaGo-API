@@ -208,3 +208,4 @@ export const orderApi = {
     return dedupedGet(`/orders/${id}/receipts`);
   },
 };
+

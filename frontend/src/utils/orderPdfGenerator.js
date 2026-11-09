@@ -331,3 +331,4 @@ export const generateOrderPdf = async (order, lines = [], options = {}) => {
 
   return { doc, blob, blobUrl };
 };
+

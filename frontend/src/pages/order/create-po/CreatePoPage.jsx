@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
@@ -11,13 +11,16 @@ import OrderFilterModal from './components/OrderFilterModal';
 import OrderTable from './components/OrderTable';
 import PrintPreviewModal from './components/PrintPreviewModal';
 import { encryptDocumentId } from '../../../utils/crypto';
-import { RefreshCw, Plus, Search, Filter, AlertCircle, ShoppingCart } from 'lucide-react';
+import { RefreshCw, AlertCircle } from 'lucide-react';
 
-const FILTER_STORAGE_KEY = 'adyago_po_filters';
+const FILTER_STORAGE_KEY = 'adyago_order_filters';
+const LEGACY_FILTER_STORAGE_KEY = 'factoryhub_order_filters';
 
 const loadSavedFilters = () => {
   try {
-    const raw = localStorage.getItem(FILTER_STORAGE_KEY);
+    const raw =
+      localStorage.getItem(FILTER_STORAGE_KEY) ||
+      localStorage.getItem(LEGACY_FILTER_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
@@ -66,133 +69,136 @@ export default function CreatePoPage() {
 
   const clientId = session?.clientId || session?.client_id || 0;
   const orgId = session?.orgId || session?.org_id || 0;
-  const roleId = session?.roleId || session?.role_id || 0;
+  const userId = session?.user?.id || session?.user?.userId || 0;
 
-  // Save filters to localStorage whenever they change
-  useEffect(() => {
-    try {
-      const filterData = {
-        search,
-        status,
-        costCenterId,
-        dateStart,
-        dateEnd,
-        limit,
-        sortBy,
-        sortDir,
-      };
-      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filterData));
-    } catch (err) {
-      console.error('Failed to cache filters:', err);
-    }
-  }, [search, status, costCenterId, dateStart, dateEnd, limit, sortBy, sortDir]);
+  const activeFilterCount =
+    (status ? 1 : 0) + (costCenterId ? 1 : 0) + (dateStart ? 1 : 0) + (dateEnd ? 1 : 0);
 
-  // Load master options once
+  // Load Master Options once
   useEffect(() => {
-    if (!clientId) return;
     orderApi
-      .getMasterOptions({ client_id: clientId, org_id: orgId, role_id: roleId })
+      .getMasterOptions(clientId, userId, session?.token)
       .then((res) => {
-        if (res && res.data) {
-          setOptions(res.data);
-        }
+        setOptions(res.data);
       })
       .catch((err) => {
-        console.warn('Failed to load master options for PO:', err);
+        console.error('Failed to load master options:', err);
       });
-  }, [clientId, orgId, roleId]);
+  }, [clientId, userId, session?.token]);
 
-  // Fetch orders list
-  const fetchOrders = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  // Fetch Orders list & stats
+  const fetchList = () => {
+    setLoading(true);
     setError(null);
-    try {
-      const params = {
-        client_id: clientId,
-        org_id: orgId,
-        search,
-        status,
-        cost_center_id: costCenterId,
-        date_start: dateStart,
-        date_end: dateEnd,
-        page,
-        limit,
-        sort_by: sortBy,
-        sort_dir: sortDir,
-      };
-      const res = await orderApi.getOrders(params);
-      if (res && res.data) {
-        setOrders(res.data.orders || []);
-        setTotal(res.data.total || 0);
-        if (res.data.stats) {
-          setStats(res.data.stats);
-        }
-      }
-      setLastRefreshed(new Date());
-    } catch (err) {
-      console.error('Failed to load purchase orders:', err);
-      setError(err?.response?.data?.error || err.message || 'Failed to load purchase orders');
-    } finally {
-      if (showLoading) setLoading(false);
-    }
+
+    const params = {
+      client_id: clientId,
+      org_id: orgId,
+      page,
+      limit,
+      sort_by: sortBy,
+      sort_dir: sortDir,
+    };
+    if (search.trim()) params.search = search.trim();
+    if (status) params.status = status;
+    if (costCenterId) params.cost_center_id = costCenterId;
+    if (dateStart) params.date_start = dateStart;
+    if (dateEnd) params.date_end = dateEnd;
+
+    orderApi
+      .getOrders(params)
+      .then((res) => {
+        setStats(res.data?.stats);
+        setOrders(res.data?.orders || []);
+        setTotal(res.data?.total || 0);
+        setLastRefreshed(new Date());
+      })
+      .catch((err) => {
+        console.error('Failed to load purchase orders:', err);
+        setError('Failed to fetch purchase orders from Enterprise Core.');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
-    fetchOrders(true);
-  }, [clientId, orgId, status, costCenterId, dateStart, dateEnd, page, limit, sortBy, sortDir]);
+    fetchList();
+  }, [clientId, orgId, page, limit, status, costCenterId, dateStart, dateEnd, sortBy, sortDir]);
 
-  // Debounced search
+  // Debounced Search
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchOrders(false);
-    }, 400);
+      setPage(1);
+      fetchList();
+    }, 350);
+
     return () => clearTimeout(timer);
   }, [search]);
 
-  const handleSort = (field) => {
-    if (sortBy === field) {
-      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortBy(field);
-      setSortDir('asc');
-    }
-    setPage(1);
-  };
+  // Persist filter options to localStorage cache
+  useEffect(() => {
+    try {
+      const hasActive = Boolean(
+        status ||
+          costCenterId ||
+          dateStart ||
+          dateEnd ||
+          search.trim() ||
+          limit !== 10 ||
+          sortBy !== 'dateordered' ||
+          sortDir !== 'desc'
+      );
 
-  const handleApplyFilters = (newFilters) => {
-    setStatus(newFilters.status || '');
-    setCostCenterId(newFilters.costCenterId || '');
-    setDateStart(newFilters.dateStart || '');
-    setDateEnd(newFilters.dateEnd || '');
-    setPage(1);
-  };
+      if (hasActive) {
+        localStorage.setItem(
+          FILTER_STORAGE_KEY,
+          JSON.stringify({
+            status,
+            costCenterId,
+            dateStart,
+            dateEnd,
+            search,
+            limit,
+            sortBy,
+            sortDir,
+          })
+        );
+      } else {
+        localStorage.removeItem(FILTER_STORAGE_KEY);
+      }
+    } catch (err) {
+      console.error('Failed to save filter cache:', err);
+    }
+  }, [status, costCenterId, dateStart, dateEnd, search, limit, sortBy, sortDir]);
 
   const handleResetFilters = () => {
-    setSearch('');
     setStatus('');
     setCostCenterId('');
     setDateStart('');
     setDateEnd('');
+    setSearch('');
     setPage(1);
     try {
       localStorage.removeItem(FILTER_STORAGE_KEY);
-    } catch {}
+    } catch (err) {
+      console.error('Failed to clear filter cache:', err);
+    }
   };
 
-  const handleView = (po) => {
-    const encryptedId = encryptDocumentId(String(po.c_order_id));
-    navigate(`/create-po?documentID=${encodeURIComponent(encryptedId)}`);
-  };
-
-  const handleCreateNew = () => {
-    navigate('/create-po?documentID=new');
+  const handleApplyFilterModal = (filters) => {
+    setStatus(filters.status);
+    setCostCenterId(filters.costCenterId);
+    setDateStart(filters.dateStart);
+    setDateEnd(filters.dateEnd);
+    setPage(1);
   };
 
   const handlePrintPreview = async (po) => {
     if (!po?.c_order_id) return;
     setPrintLoadingId(po.c_order_id);
     try {
-      const detailRes = await orderApi.getOrderDetail(po.c_order_id);
+      const detailRes = await orderApi.getOrder(po.c_order_id);
       if (detailRes && detailRes.data) {
         setPrintOrder(detailRes.data.header);
         setPrintLines(detailRes.data.lines || []);
@@ -206,163 +212,139 @@ export default function CreatePoPage() {
   };
 
   return (
-    <ModuleLayout pageTitle="Purchase Order" rootMenuId={1000031} rootMenuName="Procurement">
-      <div className="w-full max-w-7xl mx-auto space-y-6 pb-12 animate-fade-in">
-        {/* Top Header & Actions */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center space-x-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-                <ShoppingCart className="w-5 h-5" />
+    <ModuleLayout
+      pageTitle="Purchase Orders (Create PO)"
+      rootMenuId={1000000}
+      rootMenuName="Procurement"
+    >
+      {loading && orders.length === 0 && !stats ? (
+        <PageLoader
+          message="Loading Purchase Orders..."
+          subtext="Authenticating records from Enterprise Core Engine"
+        />
+      ) : (
+        <div className="space-y-4 sm:space-y-6 animate-fadeIn w-full min-w-0 max-w-full">
+          {/* Top Header & Refresh Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span className="text-[10px] sm:text-[11px] font-mono font-semibold uppercase tracking-wider text-emerald-400">
+                  Live Enterprise Stream Connected
+                </span>
               </div>
-              <div>
-                <h1 className={`text-2xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  Purchase Orders
-                </h1>
-                <p className="text-xs font-mono text-slate-500">
-                  Procurement Orders & Supplier Management
-                </p>
-              </div>
+            </div>
+
+            <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
+              <span
+                className={`text-[10px] sm:text-[11px] font-mono ${
+                  isDark ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                Updated: {lastRefreshed.toLocaleTimeString()}
+              </span>
+              <button
+                type="button"
+                onClick={fetchList}
+                disabled={loading}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-semibold transition cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-sm'
+                }`}
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`}
+                />
+                <span>Sync</span>
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2.5 w-full sm:w-auto">
-            <button
-              onClick={() => fetchOrders(true)}
-              disabled={loading}
-              title="Refresh list"
-              className={`p-2.5 rounded-2xl border transition-all ${
-                isDark
-                  ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300'
-                  : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm'
-              }`}
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
-            </button>
+          {/* Error Banner */}
+          {error && (
+            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center gap-3 text-xs font-mono">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-            <button
-              onClick={handleCreateNew}
-              className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-mono text-xs font-bold shadow-lg shadow-cyan-500/25 transition-all transform active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Purchase Order</span>
-            </button>
-          </div>
+          {/* KPI Summary Cards */}
+          <OrderStatsCards
+            stats={stats}
+            loading={loading}
+            isDark={isDark}
+            activeStatus={status}
+            onSelectStatus={(st) => {
+              setStatus(st);
+              setPage(1);
+            }}
+          />
+
+          {/* Filter Options Modal */}
+          <OrderFilterModal
+            isOpen={filterModalOpen}
+            onClose={() => setFilterModalOpen(false)}
+            status={status}
+            costCenterId={costCenterId}
+            dateStart={dateStart}
+            dateEnd={dateEnd}
+            costCenters={options?.costCenters || []}
+            onApply={handleApplyFilterModal}
+            onReset={handleResetFilters}
+            isDark={isDark}
+          />
+
+          {/* Order Table with Integrated Action Bar & Server-Side Controls */}
+          <OrderTable
+            orders={orders}
+            loading={loading}
+            total={total}
+            page={page}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={(newLimit) => {
+              setLimit(newLimit);
+              setPage(1);
+            }}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSortChange={(field, dir) => {
+              setSortBy(field);
+              setSortDir(dir);
+              setPage(1);
+            }}
+            onView={(po) => {
+              const encId = encryptDocumentId(String(po.c_order_id));
+              navigate(`/create-po?documentID=${encId}`);
+            }}
+            onPrint={handlePrintPreview}
+            printLoadingId={printLoadingId}
+            search={search}
+            onSearchChange={setSearch}
+            onOpenFilterModal={() => setFilterModalOpen(true)}
+            activeFilterCount={activeFilterCount}
+            onResetFilters={handleResetFilters}
+            onOpenCreate={() => navigate('/create-po?documentID=new')}
+            isDark={isDark}
+          />
+
+          {/* Print Order PDF Preview Modal */}
+          <PrintPreviewModal
+            isOpen={printModalOpen}
+            onClose={() => {
+              setPrintModalOpen(false);
+              setPrintOrder(null);
+              setPrintLines([]);
+            }}
+            order={printOrder}
+            lines={printLines}
+            options={{
+              documentno: printOrder?.documentno,
+            }}
+            isDark={isDark}
+          />
         </div>
-
-        {/* Error Alert */}
-        {error && (
-          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center space-x-3 text-xs font-mono">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <span className="flex-1">{error}</span>
-            <button onClick={() => setError(null)} className="underline hover:text-white">
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* Stats Cards */}
-        <OrderStatsCards
-          stats={stats}
-          loading={loading}
-          isDark={isDark}
-          activeStatus={status}
-          onSelectStatus={(st) => {
-            setStatus(st);
-            setPage(1);
-          }}
-        />
-
-        {/* Filter Bar & Search */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search PO no, supplier, desc..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className={`w-full pl-10 pr-4 py-2.5 rounded-2xl border text-xs font-mono outline-none transition-all ${
-                isDark
-                  ? 'bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500'
-                  : 'bg-white border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 shadow-sm'
-              }`}
-            />
-          </div>
-
-          <div className="flex items-center space-x-2.5 w-full sm:w-auto justify-end">
-            <button
-              onClick={() => setFilterModalOpen(true)}
-              className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl border text-xs font-mono font-bold transition-all ${
-                costCenterId || dateStart || dateEnd
-                  ? isDark
-                    ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-400'
-                    : 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                  : isDark
-                  ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300'
-                  : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm'
-              }`}
-            >
-              <Filter className="w-3.5 h-3.5" />
-              <span>Filters</span>
-              {(costCenterId || dateStart || dateEnd) && (
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-              )}
-            </button>
-
-            {(search || status || costCenterId || dateStart || dateEnd) && (
-              <button
-                onClick={handleResetFilters}
-                className="text-xs font-mono text-slate-500 hover:text-cyan-400 underline transition-colors px-2"
-              >
-                Clear all
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Orders Table */}
-        <OrderTable
-          orders={orders}
-          loading={loading}
-          isDark={isDark}
-          page={page}
-          limit={limit}
-          total={total}
-          sortBy={sortBy}
-          sortDir={sortDir}
-          onSort={handleSort}
-          onPageChange={setPage}
-          onLimitChange={(l) => {
-            setLimit(l);
-            setPage(1);
-          }}
-          onView={handleView}
-          onPrint={handlePrintPreview}
-          printLoadingId={printLoadingId}
-        />
-      </div>
-
-      {/* Filter Modal */}
-      <OrderFilterModal
-        isOpen={filterModalOpen}
-        onClose={() => setFilterModalOpen(false)}
-        isDark={isDark}
-        options={options}
-        filters={{ status, costCenterId, dateStart, dateEnd }}
-        onApply={handleApplyFilters}
-        onReset={handleResetFilters}
-      />
-
-      {/* Print Preview Modal */}
-      {printModalOpen && printOrder && (
-        <PrintPreviewModal
-          isOpen={printModalOpen}
-          onClose={() => setPrintModalOpen(false)}
-          order={printOrder}
-          lines={printLines}
-          isDark={isDark}
-        />
       )}
     </ModuleLayout>
   );
