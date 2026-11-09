@@ -152,6 +152,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
   const [paymentTermId, setPaymentTermId] = useState(idempiereConfig.createPo.defaults.paymentTermId);
   const [paymentRule, setPaymentRule] = useState(idempiereConfig.createPo.defaults.paymentRule);
   const [priorityRule, setPriorityRule] = useState(idempiereConfig.createPo.defaults.priorityRule);
+  const [taxId, setTaxId] = useState('');
   const [costCenterId, setCostCenterId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [checkedById, setCheckedById] = useState('');
@@ -208,6 +209,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
   const [receiptCount, setReceiptCount] = useState(0);
 
   const totalLineCount = linesLoaded ? docLines.length : (docHeader?.line_count ?? 0);
+  const hasLines = totalLineCount > 0;
 
   const formSelectStyles = getCustomSelectStyles(isDark, {
     borderRadius: '0.5rem',
@@ -252,6 +254,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
         setPaymentTermId(header.c_paymentterm_id || idempiereConfig.createPo.defaults.paymentTermId);
         setPaymentRule(header.paymentrule || idempiereConfig.createPo.defaults.paymentRule);
         setPriorityRule(header.priorityrule || idempiereConfig.createPo.defaults.priorityRule);
+        setTaxId(header.c_tax_id ? Number(header.c_tax_id) : '');
         setCostCenterId(header.c_costcenter_id || '');
         setProjectId(header.c_project_id || '');
         setCheckedById(header.checkedby_id || '');
@@ -331,6 +334,10 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
               }
             })
             .catch(() => {});
+        }
+
+        if (isNew && optData.taxes && optData.taxes.length > 0) {
+          setTaxId((prev) => prev || optData.taxes[0].id);
         }
 
         if (detailRes && detailRes.data) {
@@ -473,20 +480,31 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
     setError(null);
 
     const payload = {
+      org_id: Number(orgId),
       ad_org_id: Number(orgId),
+      warehouse_id: Number(warehouseId),
       m_warehouse_id: Number(warehouseId),
+      doc_type_id: Number(docTypeTargetId) || idempiereConfig.createPo.defaults.docTypeId,
       c_doctypetarget_id: Number(docTypeTargetId) || idempiereConfig.createPo.defaults.docTypeId,
+      date_ordered: dateOrdered,
       dateordered: dateOrdered,
+      date_promised: datePromised,
       datepromised: datePromised,
       c_bpartner_id: Number(vendorId),
       c_bpartner_location_id: vendorContactId ? Number(vendorContactId) : undefined,
+      ad_user_id: vendorContactId ? Number(vendorContactId) : undefined,
+      pricelist_id: Number(pricelistId) || idempiereConfig.createPo.defaults.pricelistId,
       m_pricelist_id: Number(pricelistId) || idempiereConfig.createPo.defaults.pricelistId,
-      c_paymentterm_id: Number(paymentTermId) || idempiereConfig.createPo.defaults.paymentTermId,
+      c_paymentterm_id: paymentTermId ? Number(paymentTermId) : undefined,
       paymentrule: paymentRule || idempiereConfig.createPo.defaults.paymentRule,
+      priority_rule: priorityRule || idempiereConfig.createPo.defaults.priorityRule,
       priorityrule: priorityRule || idempiereConfig.createPo.defaults.priorityRule,
+      c_tax_id: taxId ? Number(taxId) : undefined,
       c_costcenter_id: costCenterId ? Number(costCenterId) : undefined,
       c_project_id: projectId ? Number(projectId) : undefined,
+      adw_ad_user_checked_id: checkedById ? Number(checkedById) : undefined,
       checkedby_id: checkedById ? Number(checkedById) : undefined,
+      adw_ad_user_approved_id: approvedById ? Number(approvedById) : undefined,
       approvedby_id: approvedById ? Number(approvedById) : undefined,
       description: description.trim(),
     };
@@ -1153,7 +1171,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
             {/* TAB CONTENT: HEADER */}
             {!tabLoading && activeTab === 'header' && (
               <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6">
-                {/* Section 1: Order Details */}
+                {/* Section 1: General Information */}
                 <div>
                   <h3
                     className={`text-sm font-bold uppercase tracking-wider font-mono flex items-center mb-2.5 ${
@@ -1161,7 +1179,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                     }`}
                   >
                     <span className="w-1 h-5 bg-cyan-400 rounded mr-3 inline-block" />
-                    Order Details
+                    General Information
                   </h3>
 
                   <div
@@ -1193,7 +1211,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                       {/* Document No */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          PO Number
+                          Document No
                         </label>
                         <div className="col-span-1 sm:col-span-2">
                           <div className="relative">
@@ -1211,6 +1229,126 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                               <FileText className="h-4 w-4 text-slate-400" />
                             </div>
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Target Doc Type */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                          Target Doc Type <span className="text-rose-500 ml-0.5">*</span>
+                        </label>
+                        <div className="col-span-1 sm:col-span-2">
+                          <Select
+                            value={
+                              options?.doctypes
+                                ?.map((dt) => ({ value: dt.id, label: dt.label || dt.text || dt.name }))
+                                .find((dt) => Number(dt.value) === Number(docTypeTargetId)) ||
+                              (docTypeTargetId ? { value: docTypeTargetId, label: `Doc Type (${docTypeTargetId})` } : null)
+                            }
+                            onChange={(opt) => setDocTypeTargetId(opt ? opt.value : '')}
+                            options={options?.doctypes?.map((dt) => ({ value: dt.id, label: dt.label || dt.text || dt.name })) || []}
+                            styles={formSelectStyles}
+                            placeholder="- Select Doc Type -"
+                            isDisabled={true}
+                            menuPlacement="auto"
+                            menuPosition="fixed"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Cost Center */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                          Cost Center
+                        </label>
+                        <div className="col-span-1 sm:col-span-2">
+                          <Select
+                            value={
+                              options?.costCenters
+                                ?.map((cc) => ({ value: cc.id, label: cc.label || cc.text || `${cc.name} (${cc.value})` }))
+                                .find((cc) => Number(cc.value) === Number(costCenterId)) || null
+                            }
+                            onChange={(opt) => setCostCenterId(opt ? opt.value : '')}
+                            options={options?.costCenters?.map((cc) => ({ value: cc.id, label: cc.label || cc.text || `${cc.name} (${cc.value})` })) || []}
+                            styles={formSelectStyles}
+                            placeholder="- Select Cost Center -"
+                            isDisabled={isReadOnly || hasLines}
+                            isClearable
+                            menuPlacement="auto"
+                            menuPosition="fixed"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Project */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                          Project
+                        </label>
+                        <div className="col-span-1 sm:col-span-2">
+                          <Select
+                            value={
+                              options?.projects
+                                ?.map((p) => ({ value: p.id, label: p.label || p.text || `${p.name} (${p.value})` }))
+                                .find((p) => Number(p.value) === Number(projectId)) || null
+                            }
+                            onChange={(opt) => setProjectId(opt ? opt.value : '')}
+                            options={options?.projects?.map((p) => ({ value: p.id, label: p.label || p.text || `${p.name} (${p.value})` })) || []}
+                            styles={formSelectStyles}
+                            placeholder="- Select Project -"
+                            isDisabled={isReadOnly}
+                            isClearable
+                            menuPlacement="auto"
+                            menuPosition="fixed"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-start gap-2 sm:gap-4">
+                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 mt-2">
+                          Description
+                        </label>
+                        <div className="col-span-1 sm:col-span-2">
+                          <textarea
+                            rows={4}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            readOnly={isReadOnly}
+                            placeholder="Enter purchase order description..."
+                            className={`w-full px-3.5 py-2.5 text-xs font-mono rounded-lg border outline-none resize-none transition-colors ${
+                              isReadOnly
+                                ? isDark
+                                  ? 'bg-slate-950/70 border-slate-800 text-slate-300 cursor-not-allowed'
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 cursor-not-allowed'
+                                : isDark
+                                ? 'bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20'
+                                : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Column */}
+                    <div className="space-y-2.5">
+                      {/* Organization */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                          Organization <span className="text-rose-500 ml-0.5">*</span>
+                        </label>
+                        <div className="col-span-1 sm:col-span-2">
+                          <Select
+                            value={selectedOrg}
+                            onChange={(opt) => setOrgId(opt ? opt.value : '')}
+                            options={orgOptions}
+                            styles={formSelectStyles}
+                            placeholder="- Select Organization -"
+                            isDisabled={isReadOnly || hasLines || !isNew}
+                            isSearchable
+                            menuPlacement="auto"
+                            menuPosition="fixed"
+                          />
                         </div>
                       </div>
 
@@ -1277,58 +1415,11 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                               label: `${c.name}${c.phone ? ` - ${c.phone}` : ''}`,
                             }))}
                             styles={formSelectStyles}
-                            placeholder={vendorId ? '- Select Contact -' : 'Select Vendor first'}
+                            placeholder={vendorId ? '- Select Contact Person -' : 'Select Vendor first'}
                             isDisabled={isReadOnly || !vendorId}
                             isLoading={loadingContacts}
                             isSearchable
-                            menuPlacement="auto"
-                            menuPosition="fixed"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Description */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-start gap-2 sm:gap-4">
-                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 mt-2">
-                          Description
-                        </label>
-                        <div className="col-span-1 sm:col-span-2">
-                          <textarea
-                            rows={3}
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            readOnly={isReadOnly}
-                            placeholder="Enter notes or contract references..."
-                            className={`w-full px-3.5 py-2.5 text-xs font-mono rounded-lg border outline-none resize-none transition-colors ${
-                              isReadOnly
-                                ? isDark
-                                  ? 'bg-slate-950/70 border-slate-800 text-slate-300 cursor-not-allowed'
-                                  : 'bg-slate-50 border-slate-200 text-slate-600 cursor-not-allowed'
-                                : isDark
-                                ? 'bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20'
-                                : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20'
-                            }`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right Column */}
-                    <div className="space-y-2.5">
-                      {/* Organization */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Organization <span className="text-rose-500 ml-0.5">*</span>
-                        </label>
-                        <div className="col-span-1 sm:col-span-2">
-                          <Select
-                            value={selectedOrg}
-                            onChange={(opt) => setOrgId(opt ? opt.value : '')}
-                            options={orgOptions}
-                            styles={formSelectStyles}
-                            placeholder="- Select Organization -"
-                            isDisabled={isReadOnly || !isNew}
-                            isSearchable
+                            isClearable
                             menuPlacement="auto"
                             menuPosition="fixed"
                           />
@@ -1344,7 +1435,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                           <CustomDatePicker
                             value={dateOrdered}
                             onChange={setDateOrdered}
-                            placeholder="Select Date Ordered"
+                            placeholder="Select Date"
                             isDark={isDark}
                             disabled={isReadOnly}
                             required
@@ -1355,16 +1446,15 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                       {/* Date Promised */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Date Promised <span className="text-rose-500 ml-0.5">*</span>
+                          Date Promised
                         </label>
                         <div className="col-span-1 sm:col-span-2">
                           <CustomDatePicker
                             value={datePromised}
                             onChange={setDatePromised}
-                            placeholder="Select Date Promised"
+                            placeholder="Select Date"
                             isDark={isDark}
                             disabled={isReadOnly}
-                            required
                           />
                         </div>
                       </div>
@@ -1372,7 +1462,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                       {/* Priority */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Priority <span className="text-rose-500 ml-0.5">*</span>
+                          Priority
                         </label>
                         <div className="col-span-1 sm:col-span-2">
                           <Select
@@ -1397,33 +1487,39 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                         </div>
                       </div>
 
-                      {/* Payment Term */}
+                      {/* Purchase Tax */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Payment Term
+                          Purchase Tax <span className="text-rose-500 ml-0.5">*</span>
                         </label>
                         <div className="col-span-1 sm:col-span-2">
                           <Select
                             value={
-                              options?.paymentTerms
-                                ?.map((pt) => ({ value: pt.id, label: pt.label || pt.text || pt.name }))
-                                .find((pt) => Number(pt.value) === Number(paymentTermId)) || null
+                              options?.taxes
+                                ?.map((t) => ({ value: t.id, label: t.label || t.name, rate: t.rate }))
+                                .find((t) => Number(t.value) === Number(taxId)) || null
                             }
-                            onChange={(opt) => setPaymentTermId(opt ? opt.value : '')}
-                            options={options?.paymentTerms?.map((pt) => ({ value: pt.id, label: pt.label || pt.text || pt.name })) || []}
+                            onChange={(opt) => setTaxId(opt ? opt.value : '')}
+                            options={options?.taxes?.map((t) => ({ value: t.id, label: t.label || t.name, rate: t.rate })) || []}
                             styles={formSelectStyles}
-                            placeholder="- Select Payment Term -"
-                            isDisabled={isReadOnly}
+                            placeholder="- Select Purchase Tax -"
+                            isDisabled={isReadOnly || hasLines}
                             menuPlacement="auto"
                             menuPosition="fixed"
                           />
+                          {hasLines && (
+                            <p className="text-[11px] font-mono text-amber-500/90 mt-1 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                              Tax cannot be changed when order lines exist
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Section 2: Warehouse, Accounting & Approvals */}
+                {/* Section 2: Order Details */}
                 <div>
                   <h3
                     className={`text-sm font-bold uppercase tracking-wider font-mono flex items-center mb-2.5 ${
@@ -1431,7 +1527,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                     }`}
                   >
                     <span className="w-1 h-5 bg-blue-500 rounded mr-3 inline-block" />
-                    Warehouse & Accounting
+                    Order Details
                   </h3>
 
                   <div
@@ -1490,73 +1586,34 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                         </div>
                       </div>
 
-                      {/* Cost Center */}
+                      {/* Payment Term */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Cost Center
+                          Payment Term
                         </label>
                         <div className="col-span-1 sm:col-span-2">
                           <Select
                             value={
-                              options?.costCenters
-                                ?.map((cc) => ({ value: cc.id, label: cc.label || cc.text || `${cc.name} (${cc.value})` }))
-                                .find((cc) => Number(cc.value) === Number(costCenterId)) || null
+                              options?.paymentTerms
+                                ?.map((pt) => ({ value: pt.id, label: pt.label || pt.text || pt.name }))
+                                .find((pt) => Number(pt.value) === Number(paymentTermId)) || null
                             }
-                            onChange={(opt) => setCostCenterId(opt ? opt.value : '')}
-                            options={options?.costCenters?.map((cc) => ({ value: cc.id, label: cc.label || cc.text || `${cc.name} (${cc.value})` })) || []}
+                            onChange={(opt) => setPaymentTermId(opt ? opt.value : '')}
+                            options={options?.paymentTerms?.map((pt) => ({ value: pt.id, label: pt.label || pt.text || pt.name })) || []}
                             styles={formSelectStyles}
-                            placeholder="- Select Cost Center -"
+                            placeholder="- Select Payment Term -"
                             isDisabled={isReadOnly}
                             isClearable
                             menuPlacement="auto"
                             menuPosition="fixed"
                           />
-                        </div>
-                      </div>
-
-                      {/* Project */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Project
-                        </label>
-                        <div className="col-span-1 sm:col-span-2">
-                          <Select
-                            value={
-                              options?.projects
-                                ?.map((p) => ({ value: p.id, label: p.label || p.text || `${p.name} (${p.value})` }))
-                                .find((p) => Number(p.value) === Number(projectId)) || null
-                            }
-                            onChange={(opt) => setProjectId(opt ? opt.value : '')}
-                            options={options?.projects?.map((p) => ({ value: p.id, label: p.label || p.text || `${p.name} (${p.value})` })) || []}
-                            styles={formSelectStyles}
-                            placeholder="- Select Project -"
-                            isDisabled={isReadOnly}
-                            isClearable
-                            menuPlacement="auto"
-                            menuPosition="fixed"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right Column */}
-                    <div className="space-y-2.5">
-                      {/* Status */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Status
-                        </label>
-                        <div className="col-span-1 sm:col-span-2 flex items-center h-[38px]">
-                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-mono font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">
-                            {displayStatus}
-                          </span>
                         </div>
                       </div>
 
                       {/* Checked By */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Checked By
+                          Checked By <span className="text-rose-500 ml-0.5">*</span>
                         </label>
                         <div className="col-span-1 sm:col-span-2">
                           <Select
@@ -1568,7 +1625,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                             onChange={(opt) => setCheckedById(opt ? opt.value : '')}
                             options={options?.users?.map((u) => ({ value: u.id, label: u.label || u.text || u.name })) || []}
                             styles={formSelectStyles}
-                            placeholder="- Select Reviewer -"
+                            placeholder="- Select -"
                             isDisabled={isReadOnly}
                             isClearable
                             menuPlacement="auto"
@@ -1580,7 +1637,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                       {/* Approved By */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Approved By
+                          Approved By <span className="text-rose-500 ml-0.5">*</span>
                         </label>
                         <div className="col-span-1 sm:col-span-2">
                           <Select
@@ -1592,7 +1649,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                             onChange={(opt) => setApprovedById(opt ? opt.value : '')}
                             options={options?.users?.map((u) => ({ value: u.id, label: u.label || u.text || u.name })) || []}
                             styles={formSelectStyles}
-                            placeholder="- Select Approver -"
+                            placeholder="- Select -"
                             isDisabled={isReadOnly}
                             isClearable
                             menuPlacement="auto"
@@ -1601,43 +1658,122 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Section 3: Financial Summary */}
-                {!isNew && (
-                  <div>
-                    <h3
-                      className={`text-sm font-bold uppercase tracking-wider font-mono flex items-center mb-2.5 ${
-                        isDark ? 'text-slate-200' : 'text-slate-800'
-                      }`}
-                    >
-                      <span className="w-1 h-5 bg-emerald-500 rounded mr-3 inline-block" />
-                      Financial Summary
-                    </h3>
+                    {/* Right Column */}
+                    <div className="space-y-2.5">
+                      {/* Total Amount */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                          Total Amount
+                        </label>
+                        <div className="col-span-1 sm:col-span-2">
+                          <input
+                            type="text"
+                            value={formatCurrency(docHeader?.totallines || 0)}
+                            readOnly
+                            className={`w-full h-[38px] px-3.5 text-xs font-mono font-medium text-right border rounded-lg cursor-not-allowed transition-colors ${
+                              isDark
+                                ? 'bg-slate-950/70 border-slate-800 text-slate-300'
+                                : 'bg-slate-50 border-slate-200 text-slate-600'
+                            }`}
+                          />
+                        </div>
+                      </div>
 
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-5 rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm font-mono">
-                      <div>
-                        <span className="text-[10px] uppercase tracking-wider text-slate-400 block font-medium">Subtotal</span>
-                        <span className="text-base font-bold text-slate-200">{formatCurrency(docHeader?.totallines)}</span>
+                      {/* Total Tax Amount */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                          Total Tax Amount
+                        </label>
+                        <div className="col-span-1 sm:col-span-2">
+                          <input
+                            type="text"
+                            value={formatCurrency(
+                              docHeader?.taxamt !== undefined && docHeader?.taxamt !== null
+                                ? docHeader.taxamt
+                                : (Number(docHeader?.grandtotal) || 0) - (Number(docHeader?.totallines) || 0)
+                            )}
+                            readOnly
+                            className={`w-full h-[38px] px-3.5 text-xs font-mono font-medium text-right border rounded-lg cursor-not-allowed transition-colors ${
+                              isDark
+                                ? 'bg-slate-950/70 border-slate-800 text-slate-300'
+                                : 'bg-slate-50 border-slate-200 text-slate-600'
+                            }`}
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-[10px] uppercase tracking-wider text-slate-400 block font-medium">Tax (PPN)</span>
-                        <span className="text-base font-bold text-amber-400">{formatCurrency(docHeader?.taxamt)}</span>
+
+                      {/* Total Other Tax */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                          Total Other Tax
+                        </label>
+                        <div className="col-span-1 sm:col-span-2">
+                          <input
+                            type="text"
+                            value={formatCurrency(docHeader?.withholdingamount || docHeader?.adw_withholdingamount || 0)}
+                            readOnly
+                            className={`w-full h-[38px] px-3.5 text-xs font-mono font-medium text-right border rounded-lg cursor-not-allowed transition-colors ${
+                              isDark
+                                ? 'bg-slate-950/70 border-slate-800 text-amber-400'
+                                : 'bg-slate-50 border-slate-200 text-amber-600'
+                            }`}
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-[10px] uppercase tracking-wider text-slate-400 block font-medium">PPh23 Withholding</span>
-                        <span className="text-base font-bold text-rose-400">
-                          {docHeader?.adw_withholdingamount ? `-${formatCurrency(docHeader?.adw_withholdingamount)}` : 'Rp 0'}
-                        </span>
+
+                      {/* Grand Total Amount */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label
+                          className={`text-left sm:text-right text-xs font-mono font-bold ${
+                            isDark ? 'text-slate-100' : 'text-slate-900'
+                          }`}
+                        >
+                          Grand Total Amount
+                        </label>
+                        <div className="col-span-1 sm:col-span-2">
+                          <input
+                            type="text"
+                            value={formatCurrency(
+                              (Number(docHeader?.grandtotal) || 0) -
+                                (Number(docHeader?.withholdingamount || docHeader?.adw_withholdingamount) || 0)
+                            )}
+                            readOnly
+                            className={`w-full h-[38px] px-3.5 text-xs font-mono font-bold text-right border rounded-lg cursor-not-allowed transition-colors ${
+                              isDark
+                                ? 'bg-slate-950/70 border-slate-800 text-white'
+                                : 'bg-slate-50 border-slate-200 text-slate-900'
+                            }`}
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-[10px] uppercase tracking-wider text-slate-400 block font-medium">Grand Total</span>
-                        <span className="text-lg font-black text-cyan-400">{formatCurrency(docHeader?.grandtotal)}</span>
+
+                      {/* Status */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                          Status
+                        </label>
+                        <div className="col-span-1 sm:col-span-2 flex items-center h-[38px]">
+                          <span
+                            className={`inline-flex items-center px-4 py-1.5 rounded-full text-xs font-mono font-bold ${
+                              ['NA', 'VO', 'RE'].includes(currentDocStatus)
+                                ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                                : ['CO', 'CL', 'AP'].includes(currentDocStatus)
+                                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                : currentDocStatus === 'IP'
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                : currentDocStatus === 'DR'
+                                ? 'bg-slate-500/15 text-slate-400 border border-slate-500/30'
+                                : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                            }`}
+                          >
+                            {displayStatus}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
               </form>
             )}
 
