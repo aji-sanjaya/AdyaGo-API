@@ -8,8 +8,7 @@ import {
   Cpu, ArrowLeft, LayoutDashboard, ShoppingCart, TrendingUp,
   Truck, Warehouse, RefreshCw, LogOut, ChevronRight, ChevronDown, Menu, X,
   Sun, Moon, Bell, User, FileText, Building2, Shield, Network,
-  AlertTriangle, CheckCircle2, Info, ExternalLink, Clock, Loader2,
-  PanelLeftClose, PanelLeftOpen
+  AlertTriangle, CheckCircle2, Info, ExternalLink, Clock, Loader2
 } from 'lucide-react';
 
 export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMenuId = 1000030, rootMenuName = 'Dashboard' }) {
@@ -311,19 +310,10 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
             </div>
 
             <button
-              type="button"
-              onClick={() => {
-                if (window.innerWidth < 1024) {
-                  setMobileMenuOpen(false);
-                } else {
-                  toggleSidebar();
-                }
-              }}
-              title="Minimize Sidebar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition cursor-pointer"
+              onClick={() => setMobileMenuOpen(false)}
+              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white"
             >
-              <PanelLeftClose className="w-5 h-5 hidden lg:block" />
-              <X className="w-5 h-5 lg:hidden" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
@@ -538,7 +528,7 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
           }`}
         >
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 mr-2">
-            {/* Sidebar Minimize / Expand Button */}
+            {/* Sidebar Minimize / Expand Button (3 horizontal lines) */}
             <button
               type="button"
               onClick={() => {
@@ -560,11 +550,7 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
                   : 'text-slate-700 bg-slate-100 hover:bg-slate-200 border-slate-200 hover:text-slate-900'
               }`}
             >
-              {sidebarCollapsed ? (
-                <PanelLeftOpen className="w-5 h-5 transition-transform duration-200" />
-              ) : (
-                <PanelLeftClose className="w-5 h-5 transition-transform duration-200" />
-              )}
+              <Menu className="w-5 h-5 transition-transform duration-200" />
             </button>
 
             <div className="min-w-0">
