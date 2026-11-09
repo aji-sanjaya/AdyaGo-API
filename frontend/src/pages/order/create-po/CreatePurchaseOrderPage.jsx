@@ -56,6 +56,43 @@ import OrderChatTab from './components/OrderChatTab';
 import OrderChangeLogTab from './components/OrderChangeLogTab';
 import PrintPreviewModal from './components/PrintPreviewModal';
 
+const normalizeOptions = (raw) => {
+  if (!raw) return {};
+  const normalizeList = (list) =>
+    (list || []).map((item) => ({
+      id: item.id !== undefined ? item.id : item.value,
+      value: item.id !== undefined ? item.id : item.value,
+      name: item.name || item.text || item.label || '',
+      text: item.text || item.name || item.label || '',
+      label: item.text || item.name || item.label || '',
+      ...item,
+    }));
+
+  return {
+    ...raw,
+    organizations: normalizeList(raw.organizations),
+    warehouses: normalizeList(raw.warehouses),
+    pricelists: normalizeList(raw.pricelists),
+    doctypes: normalizeList(raw.doctypes),
+    priorities: normalizeList(raw.priorities),
+    paymentTerms: normalizeList(raw.payment_terms || raw.paymentTerms),
+    payment_terms: normalizeList(raw.payment_terms || raw.paymentTerms),
+    taxes: (raw.taxes || []).map((t) => ({
+      id: t.id,
+      name: t.name || t.text,
+      text: t.text || t.name,
+      label: t.text || t.name,
+      rate: Number(t.rate || 0),
+    })),
+    projects: normalizeList(raw.projects),
+    costCenters: normalizeList(raw.cost_centers || raw.costCenters),
+    cost_centers: normalizeList(raw.cost_centers || raw.costCenters),
+    approvers: normalizeList(raw.approvers),
+    users: normalizeList(raw.users || raw.approvers),
+    vendors: normalizeList(raw.vendors),
+  };
+};
+
 export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -221,11 +258,23 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
         setApprovedById(header.approvedby_id || '');
         setDescription(header.description || '');
 
-        if (header.c_bpartner_id && header.vendor_name) {
+        if (header.c_bpartner_id && (header.vendor_name || header.bpartner_name)) {
+          const vName = header.vendor_name || header.bpartner_name;
+          const vVal = header.vendor_value || header.bpartner_value || '';
+          const vText = `${vVal ? vVal + ' - ' : ''}${vName}`;
           setVendorOptions((prev) => {
             const exists = prev.some((v) => Number(v.id) === Number(header.c_bpartner_id));
             if (!exists) {
-              return [{ id: header.c_bpartner_id, name: header.vendor_name, value: header.vendor_value }, ...prev];
+              return [
+                {
+                  id: header.c_bpartner_id,
+                  value: header.c_bpartner_id,
+                  name: vName,
+                  text: vText,
+                  label: vText,
+                },
+                ...prev,
+              ];
             }
             return prev;
           });
@@ -261,10 +310,27 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
     Promise.all([loadOptions, loadDetail, loadAtts, loadChatData, loadLogsData, loadReqsData, loadReceiptsData])
       .then(([optRes, detailRes, attRes, chatRes, logsRes, reqsRes, receiptsRes]) => {
         if (!isMounted) return;
-        const optData = optRes.data || {};
+        const optData = normalizeOptions(optRes?.data || optRes || {});
         setOptions(optData);
-        if (optData.vendors) {
+        if (optData.vendors && optData.vendors.length > 0) {
           setVendorOptions(optData.vendors);
+        } else {
+          orderApi
+            .searchVendors(clientId, '')
+            .then((vRes) => {
+              if (!isMounted) return;
+              const vList = (vRes?.data || []).map((v) => ({
+                id: v.id,
+                value: v.id,
+                name: v.name || v.text || '',
+                text: v.text || v.name || '',
+                label: v.text || v.name || '',
+              }));
+              if (vList.length > 0) {
+                setVendorOptions((prev) => (prev.length > 0 ? prev : vList));
+              }
+            })
+            .catch(() => {});
         }
 
         if (detailRes && detailRes.data) {
@@ -333,7 +399,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
 
   // Filtered org options according to user session role / org context
   const allOrgList = useMemo(
-    () => options?.organizations?.map((org) => ({ value: org.id, label: org.name })) || [],
+    () => options?.organizations?.map((org) => ({ value: org.id, label: org.label || org.name || org.text })) || [],
     [options?.organizations]
   );
 
@@ -1157,7 +1223,16 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                           <Select
                             value={
                               selectedVendor
-                                ? { value: selectedVendor.id, label: `${selectedVendor.name}${selectedVendor.value ? ` (${selectedVendor.value})` : ''}` }
+                                ? {
+                                    value: selectedVendor.id,
+                                    label:
+                                      selectedVendor.label ||
+                                      selectedVendor.text ||
+                                      `${selectedVendor.name || ''}${
+                                        selectedVendor.value ? ` (${selectedVendor.value})` : ''
+                                      }` ||
+                                      'Vendor',
+                                  }
                                 : null
                             }
                             onChange={(opt) => {
@@ -1167,7 +1242,11 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                             onInputChange={handleVendorSearch}
                             options={vendorOptions.map((v) => ({
                               value: v.id,
-                              label: `${v.name}${v.value ? ` (${v.value})` : ''}`,
+                              label:
+                                v.label ||
+                                v.text ||
+                                `${v.name || ''}${v.value ? ` (${v.value})` : ''}` ||
+                                'Vendor',
                             }))}
                             styles={formSelectStyles}
                             placeholder="- Search Vendor / Supplier -"
@@ -1299,12 +1378,12 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                           <Select
                             value={
                               options?.priorities
-                                ?.map((p) => ({ value: String(p.value), label: p.label }))
+                                ?.map((p) => ({ value: String(p.id || p.value), label: p.label || p.text || p.name }))
                                 .find((p) => p.value === String(priorityRule)) || null
                             }
                             onChange={(opt) => setPriorityRule(opt ? opt.value : '5')}
                             options={
-                              options?.priorities?.map((p) => ({ value: String(p.value), label: p.label })) || [
+                              options?.priorities?.map((p) => ({ value: String(p.id || p.value), label: p.label || p.text || p.name })) || [
                                 { value: '3', label: 'High' },
                                 { value: '5', label: 'Medium' },
                                 { value: '7', label: 'Low' },
@@ -1327,11 +1406,11 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                           <Select
                             value={
                               options?.paymentTerms
-                                ?.map((pt) => ({ value: pt.id, label: pt.name }))
+                                ?.map((pt) => ({ value: pt.id, label: pt.label || pt.text || pt.name }))
                                 .find((pt) => Number(pt.value) === Number(paymentTermId)) || null
                             }
                             onChange={(opt) => setPaymentTermId(opt ? opt.value : '')}
-                            options={options?.paymentTerms?.map((pt) => ({ value: pt.id, label: pt.name })) || []}
+                            options={options?.paymentTerms?.map((pt) => ({ value: pt.id, label: pt.label || pt.text || pt.name })) || []}
                             styles={formSelectStyles}
                             placeholder="- Select Payment Term -"
                             isDisabled={isReadOnly}
@@ -1369,9 +1448,16 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                         </label>
                         <div className="col-span-1 sm:col-span-2">
                           <Select
-                            value={selectedWh ? { value: selectedWh.id, label: selectedWh.name } : null}
+                            value={
+                              selectedWh
+                                ? { value: selectedWh.id, label: selectedWh.label || selectedWh.name || selectedWh.text }
+                                : null
+                            }
                             onChange={(opt) => setWarehouseId(opt ? opt.value : '')}
-                            options={filteredWarehouses.map((w) => ({ value: w.id, label: w.name }))}
+                            options={filteredWarehouses.map((w) => ({
+                              value: w.id,
+                              label: w.label || w.name || w.text,
+                            }))}
                             styles={formSelectStyles}
                             placeholder="- Select Warehouse -"
                             isDisabled={isReadOnly}
@@ -1390,11 +1476,11 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                           <Select
                             value={
                               options?.pricelists
-                                ?.map((pl) => ({ value: pl.id, label: pl.name }))
+                                ?.map((pl) => ({ value: pl.id, label: pl.label || pl.text || pl.name }))
                                 .find((pl) => Number(pl.value) === Number(pricelistId)) || null
                             }
                             onChange={(opt) => setPricelistId(opt ? opt.value : '')}
-                            options={options?.pricelists?.map((pl) => ({ value: pl.id, label: pl.name })) || []}
+                            options={options?.pricelists?.map((pl) => ({ value: pl.id, label: pl.label || pl.text || pl.name })) || []}
                             styles={formSelectStyles}
                             placeholder="- Select Price List -"
                             isDisabled={isReadOnly}
@@ -1413,11 +1499,11 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                           <Select
                             value={
                               options?.costCenters
-                                ?.map((cc) => ({ value: cc.id, label: `${cc.name} (${cc.value})` }))
+                                ?.map((cc) => ({ value: cc.id, label: cc.label || cc.text || `${cc.name} (${cc.value})` }))
                                 .find((cc) => Number(cc.value) === Number(costCenterId)) || null
                             }
                             onChange={(opt) => setCostCenterId(opt ? opt.value : '')}
-                            options={options?.costCenters?.map((cc) => ({ value: cc.id, label: `${cc.name} (${cc.value})` })) || []}
+                            options={options?.costCenters?.map((cc) => ({ value: cc.id, label: cc.label || cc.text || `${cc.name} (${cc.value})` })) || []}
                             styles={formSelectStyles}
                             placeholder="- Select Cost Center -"
                             isDisabled={isReadOnly}
@@ -1437,11 +1523,11 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                           <Select
                             value={
                               options?.projects
-                                ?.map((p) => ({ value: p.id, label: `${p.name} (${p.value})` }))
+                                ?.map((p) => ({ value: p.id, label: p.label || p.text || `${p.name} (${p.value})` }))
                                 .find((p) => Number(p.value) === Number(projectId)) || null
                             }
                             onChange={(opt) => setProjectId(opt ? opt.value : '')}
-                            options={options?.projects?.map((p) => ({ value: p.id, label: `${p.name} (${p.value})` })) || []}
+                            options={options?.projects?.map((p) => ({ value: p.id, label: p.label || p.text || `${p.name} (${p.value})` })) || []}
                             styles={formSelectStyles}
                             placeholder="- Select Project -"
                             isDisabled={isReadOnly}
@@ -1476,11 +1562,11 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                           <Select
                             value={
                               options?.users
-                                ?.map((u) => ({ value: u.id, label: u.name }))
+                                ?.map((u) => ({ value: u.id, label: u.label || u.text || u.name }))
                                 .find((u) => Number(u.value) === Number(checkedById)) || null
                             }
                             onChange={(opt) => setCheckedById(opt ? opt.value : '')}
-                            options={options?.users?.map((u) => ({ value: u.id, label: u.name })) || []}
+                            options={options?.users?.map((u) => ({ value: u.id, label: u.label || u.text || u.name })) || []}
                             styles={formSelectStyles}
                             placeholder="- Select Reviewer -"
                             isDisabled={isReadOnly}
@@ -1500,11 +1586,11 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                           <Select
                             value={
                               options?.users
-                                ?.map((u) => ({ value: u.id, label: u.name }))
+                                ?.map((u) => ({ value: u.id, label: u.label || u.text || u.name }))
                                 .find((u) => Number(u.value) === Number(approvedById)) || null
                             }
                             onChange={(opt) => setApprovedById(opt ? opt.value : '')}
-                            options={options?.users?.map((u) => ({ value: u.id, label: u.name })) || []}
+                            options={options?.users?.map((u) => ({ value: u.id, label: u.label || u.text || u.name })) || []}
                             styles={formSelectStyles}
                             placeholder="- Select Approver -"
                             isDisabled={isReadOnly}

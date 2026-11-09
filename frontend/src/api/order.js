@@ -50,6 +50,10 @@ export const orderApi = {
     return dedupedGet('/orders', { params });
   },
 
+  getOrder: async (id) => {
+    return dedupedGet(`/orders/${id}`);
+  },
+
   getOrderDetail: async (id) => {
     return dedupedGet(`/orders/${id}`);
   },
@@ -58,7 +62,20 @@ export const orderApi = {
     return dedupedGet(`/orders/${id}/lines`);
   },
 
-  getMasterOptions: async (params = {}, forceRefresh = false) => {
+  getMasterOptions: async (paramsOrClientId = {}, userIdOrForce = false, maybeToken = '') => {
+    let params = {};
+    let forceRefresh = false;
+
+    if (typeof paramsOrClientId === 'object' && paramsOrClientId !== null) {
+      params = paramsOrClientId;
+      forceRefresh = Boolean(userIdOrForce);
+    } else {
+      params = { client_id: paramsOrClientId };
+      if (typeof userIdOrForce === 'number' || typeof userIdOrForce === 'string') {
+        params.user_id = userIdOrForce;
+      }
+    }
+
     const cacheKey = `${params.client_id || ''}_${params.org_id || ''}_${params.role_id || ''}`;
     if (!forceRefresh && masterOptionsCache.has(cacheKey)) {
       return masterOptionsCache.get(cacheKey);
@@ -87,8 +104,24 @@ export const orderApi = {
     return dedupedGet('/orders/vendors', { params });
   },
 
+  searchVendors: async (clientId, search = '') => {
+    return dedupedGet('/orders/vendors', { params: { client_id: clientId, search } });
+  },
+
   getContacts: async (bpartnerId, search = '') => {
     return dedupedGet('/orders/contacts', { params: { bpartner_id: bpartnerId, search } });
+  },
+
+  searchContacts: async (clientId, bpartnerId, search = '') => {
+    const bpId = bpartnerId || clientId;
+    return dedupedGet('/orders/contacts', {
+      params: { client_id: clientId, bpartner_id: bpId, search: search || '' },
+    });
+  },
+
+  downloadAttachment: (id, filename) => {
+    const url = `${idempiereConfig.api.baseUrl}/orders/${id}/attachments/${encodeURIComponent(filename)}?download=true`;
+    window.open(url, '_blank');
   },
 
   getProducts: async (params = {}) => {
