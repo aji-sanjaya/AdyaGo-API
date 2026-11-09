@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { idempiereConfig } from '../config/idempiere';
 
-const API_BASE = 'http://localhost:8080/api/v1';
+const API_BASE = idempiereConfig.api.baseUrl;
 
 const apiClient = axios.create({
   baseURL: API_BASE,

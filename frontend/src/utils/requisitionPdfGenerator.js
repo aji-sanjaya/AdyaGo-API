@@ -3,6 +3,7 @@ import jsPDFDefault from 'jspdf';
 import autoTable, { autoTable as autoTableNamed } from 'jspdf-autotable';
 import QRCode, { toDataURL } from 'qrcode';
 import { LOGO_ADW_BASE64 } from '../assets/logoData.js';
+import { idempiereConfig } from '../config/idempiere.js';
 
 // Resolve jsPDF constructor across different ESM/CJS bundlers
 const getJsPDF = () => {
@@ -158,7 +159,7 @@ export const generateRequisitionPdf = async (requisition = {}, lines = [], optio
   const contentWidth = marginRight - marginLeft; // 186mm
   const startTopY = 12;
 
-  const clientName = requisition.client_name || options.clientName || 'PT. Adyawinsa Plastics Industry';
+  const clientName = requisition.client_name || options.clientName || idempiereConfig.tenant.name;
   const addressLines = options.addressLines || [
     'Jl. Angsana Raya Blok L6 No. 1, Delta Silicon I',
     'Lippo Cikarang, Cikarang Selatan',

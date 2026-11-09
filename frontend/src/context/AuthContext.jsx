@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '../api/auth';
+import { idempiereConfig } from '../config/idempiere';
 
 const AuthContext = createContext(null);
 
-const SESSION_KEY = 'adyago_session';
-const LEGACY_SESSION_KEY = 'factoryhub_session';
-const TEMP_AUTH_KEY = 'adyago_temp_auth';
-const LEGACY_TEMP_AUTH_KEY = 'factoryhub_temp_auth';
+const SESSION_KEY = idempiereConfig.storage.sessionKey;
+const LEGACY_SESSION_KEY = idempiereConfig.storage.legacySessionKey;
+const TEMP_AUTH_KEY = idempiereConfig.storage.tempAuthKey;
+const LEGACY_TEMP_AUTH_KEY = idempiereConfig.storage.legacyTempAuthKey;
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(() => {

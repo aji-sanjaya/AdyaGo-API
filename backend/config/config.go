@@ -19,6 +19,7 @@ type Config struct {
 	IdempiereDBName     string
 	IdempiereDBSSLMode  string
 	CORSAllowedOrigins  []string
+	ERP                 *IdempiereERPConfig
 }
 
 func LoadConfig() (*Config, error) {
@@ -35,6 +36,7 @@ func LoadConfig() (*Config, error) {
 		IdempiereDBPassword: getEnv("IDEMPIERE_DB_PASSWORD", "c1k4r4ng"),
 		IdempiereDBName:     getEnv("IDEMPIERE_DB_NAME", "idempiere"),
 		IdempiereDBSSLMode:  getEnv("IDEMPIERE_DB_SSLMODE", "disable"),
+		ERP:                 LoadIdempiereERPConfig(),
 	}
 
 	origins := getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173")

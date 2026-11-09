@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"factoryhub-go/config"
 	"factoryhub-go/internal/database"
 	"factoryhub-go/internal/idempiere"
 )
@@ -19,12 +20,14 @@ import (
 type Service struct {
 	db              *database.DBInstance
 	idempiereClient *idempiere.Client
+	cfg             *config.Config
 }
 
-func NewService(db *database.DBInstance, idempiereClient *idempiere.Client) *Service {
+func NewService(db *database.DBInstance, idempiereClient *idempiere.Client, cfg *config.Config) *Service {
 	return &Service{
-		db:             db,
+		db:              db,
 		idempiereClient: idempiereClient,
+		cfg:             cfg,
 	}
 }
 
@@ -363,6 +366,10 @@ func (s *Service) GetMasterOptions(clientID, orgID int) (*MasterOptionsResponse,
 		ClientName:    "PT. Adyawinsa Plastics Industry",
 	}
 
+	if s.cfg != nil && s.cfg.ERP != nil && s.cfg.ERP.DefaultClientName != "" {
+		opts.ClientName = s.cfg.ERP.DefaultClientName
+	}
+
 	// Organizations
 	orgSQL := `
 		SELECT ad_org_id as id, name as text
@@ -504,6 +511,11 @@ func (s *Service) SearchProducts(clientID int, query string) ([]ProductOption, e
 }
 
 func (s *Service) CreateRequisition(token string, clientID int, userID int, req CreateRequisitionRequest) (map[string]interface{}, error) {
+	docTypeID := 1000018
+	if s.cfg != nil && s.cfg.ERP != nil && s.cfg.ERP.PRDocTypeID > 0 {
+		docTypeID = s.cfg.ERP.PRDocTypeID
+	}
+
 	payload := map[string]interface{}{
 		"AD_Client_ID":   clientID,
 		"AD_Org_ID":      req.OrgID,
@@ -512,7 +524,7 @@ func (s *Service) CreateRequisition(token string, clientID int, userID int, req 
 		"PriorityRule":   req.PriorityRule,
 		"DateDoc":        req.DateDoc,
 		"DateRequired":   req.DateRequired,
-		"C_DocType_ID":   1000018, // Purchase Requisition
+		"C_DocType_ID":   docTypeID, // Purchase Requisition
 		"Description":    req.Description,
 		"IsActive":       true,
 	}

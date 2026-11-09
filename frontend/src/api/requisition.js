@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { idempiereConfig } from '../config/idempiere';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api/v1',
+  baseURL: idempiereConfig.api.baseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -98,7 +99,7 @@ export const requisitionApi = {
   },
 
   getAttachmentDownloadUrl: (id, filename, download = false) => {
-    return `http://localhost:8080/api/v1/requisitions/${id}/attachments/${encodeURIComponent(filename)}${download ? '?download=true' : ''}`;
+    return `${idempiereConfig.api.baseUrl}/requisitions/${id}/attachments/${encodeURIComponent(filename)}${download ? '?download=true' : ''}`;
   },
 
   getChat: async (id) => {
@@ -119,7 +120,7 @@ export const requisitionApi = {
   },
 
   getChatAttachmentUrl: (chatEntryId, filename) => {
-    return `http://localhost:8080/api/v1/requisitions/chat/attachments/${chatEntryId}/${encodeURIComponent(filename)}`;
+    return `${idempiereConfig.api.baseUrl}/requisitions/chat/attachments/${chatEntryId}/${encodeURIComponent(filename)}`;
   },
 
   getChangeLogs: async (id) => {

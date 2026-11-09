@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
+import { idempiereConfig } from '../../../config/idempiere';
 import ModuleLayout from '../../../layouts/ModuleLayout';
 import { requisitionApi } from '../../../api/requisition';
 import PageLoader from '../../../components/ui/PageLoader';
@@ -83,7 +84,7 @@ export default function CreatePrPage() {
         ...headerData,
         status_label: headerData.status_label || headerData.docstatus || req.docstatus,
         cost_center_value: headerData.cost_center_value || req.cost_center_value || req.cost_center_name || 'PROD',
-        client_name: headerData.client_name || session?.clientName || 'PT. Adyawinsa Plastics Industry',
+        client_name: headerData.client_name || session?.clientName || idempiereConfig.tenant.name,
         logo_base64: headerData.logo_base64 || options?.logo_base64,
       });
       setPrintLines(linesData);

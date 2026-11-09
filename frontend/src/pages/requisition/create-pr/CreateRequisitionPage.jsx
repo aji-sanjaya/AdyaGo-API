@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
+import { idempiereConfig } from '../../../config/idempiere';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
 import ModuleLayout from '../../../layouts/ModuleLayout';
@@ -110,8 +111,8 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
   // Form Fields State (default to context org and warehouse when new)
   const [orgId, setOrgId] = useState(isNew && orgIdDefault ? orgIdDefault : '');
   const [warehouseId, setWarehouseId] = useState(isNew && warehouseIdDefault ? warehouseIdDefault : '');
-  const [pricelistId, setPricelistId] = useState(1000208); // Default Purchase IDR
-  const [priorityRule, setPriorityRule] = useState('5'); // Default Medium
+  const [pricelistId, setPricelistId] = useState(idempiereConfig.createPr.defaults.pricelistId);
+  const [priorityRule, setPriorityRule] = useState(idempiereConfig.createPr.defaults.priorityRule);
   const [dateDoc, setDateDoc] = useState(todayStr);
   const [dateRequired, setDateRequired] = useState(todayStr);
   const [costCenterId, setCostCenterId] = useState('');
@@ -598,8 +599,8 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
       if (populateForm) {
         setOrgId(header.org_id ? Number(header.org_id) : (orgIdDefault ? Number(orgIdDefault) : ''));
         setWarehouseId(header.warehouse_id ? Number(header.warehouse_id) : (warehouseIdDefault ? Number(warehouseIdDefault) : ''));
-        setPricelistId(header.pricelist_id || 1000208);
-        setPriorityRule(header.priority_rule || '5');
+        setPricelistId(header.pricelist_id || idempiereConfig.createPr.defaults.pricelistId);
+        setPriorityRule(header.priority_rule || idempiereConfig.createPr.defaults.priorityRule);
         setDateDoc(header.datedoc ? header.datedoc.split('T')[0] : todayStr);
         setDateRequired(
           header.daterequired ? header.daterequired.split('T')[0] : todayStr
@@ -1212,7 +1213,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
   ];
 
   const clientDisplayName =
-    options?.client_name || session?.clientName || 'PT. Adyawinsa Plastics Industry';
+    options?.client_name || session?.clientName || idempiereConfig.tenant.name;
 
   const selectedOrg = orgOptions.find((o) => o.value === Number(orgId)) || null;
   const selectedWh = warehouseOptions.find((w) => w.value === Number(warehouseId)) || null;
@@ -1235,13 +1236,11 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
     userOptions.find((u) => u.value === Number(approvedById)) || userOptions[0];
 
   const displayDocNo = isNew ? '** New **' : docHeader?.documentno || '** View **';
-  const displayStatus = isNew ? 'Drafted' : docHeader?.status_label || 'Drafted';
+  const displayStatus = isNew ? idempiereConfig.createPr.defaults.documentStatusLabel : docHeader?.status_label || idempiereConfig.createPr.defaults.documentStatusLabel;
 
-  // Read-only logic:
-  // In iDempiere: Completed ('CO', 'CL'), Voided ('VO'), Reversed ('RE') are read-only.
-  // Draft ('DR', 'IN') and In Progress ('IP') are editable!
+  // Read-only logic configured centrally in idempiereConfig:
   const currentDocStatus = (docHeader?.docstatus || 'DR').toUpperCase();
-  const readOnlyStatuses = ['CO', 'CL', 'VO', 'RE'];
+  const readOnlyStatuses = idempiereConfig.createPr.statuses.readOnly;
   const isReadOnly = !isNew && readOnlyStatuses.includes(currentDocStatus);
 
   return (
@@ -2986,16 +2985,11 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                           isDark ? 'text-white' : 'text-slate-900'
                         }`}
                       >
-                        Confirm Action: {actionPendingConfirm === 'CO' ? 'Complete' : actionPendingConfirm === 'VO' ? 'Void' : actionPendingConfirm === 'RE' ? 'Re-Active' : 'Close'}
+                        Confirm Action: {idempiereConfig.createPr.workflow.actionLabels[actionPendingConfirm] || actionPendingConfirm}
                       </h4>
                       <p className="text-xs text-slate-400 mt-1">
-                        {actionPendingConfirm === 'CO'
-                          ? 'Are you sure you want to complete this document?'
-                          : actionPendingConfirm === 'VO'
-                          ? 'Are you sure you want to void this document? This action cannot be undone!'
-                          : actionPendingConfirm === 'RE'
-                          ? 'Are you sure you want to re-activate this document back to Draft?'
-                          : 'Are you sure you want to close this requisition document?'}
+                        {idempiereConfig.createPr.workflow.confirmationMessages[actionPendingConfirm] ||
+                          'Are you sure you want to proceed with this document action?'}
                       </p>
                     </div>
                   </div>

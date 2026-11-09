@@ -56,7 +56,7 @@ func main() {
 	dashHandler := dashboard.NewHandler(dashService)
 
 	// Initialize Requisition (Create PR) module
-	reqService := requisition.NewService(dbInstance, idempiereClient)
+	reqService := requisition.NewService(dbInstance, idempiereClient, cfg)
 	reqHandler := requisition.NewHandler(reqService)
 
 	// Initialize Notification module
