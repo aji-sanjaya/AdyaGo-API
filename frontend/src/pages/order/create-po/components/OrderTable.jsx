@@ -357,12 +357,12 @@ export default function OrderTable({
                   </td>
 
                   {/* Vendor / Supplier */}
-                  <td className="px-4 py-2">
-                    <span className="font-bold block truncate max-w-xs text-slate-800 dark:text-slate-200">
+                  <td className="px-4 py-2 font-mono text-slate-400">
+                    <span className="block truncate max-w-xs">
                       {po.bpartner_name || '-'}
                     </span>
                     {po.bpartner_value && (
-                      <span className="text-[10px] font-mono text-slate-500 block">
+                      <span className="text-[10px] text-slate-500 block">
                         {po.bpartner_value}
                       </span>
                     )}
