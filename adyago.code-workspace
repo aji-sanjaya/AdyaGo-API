@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../api-web-portal-v2"
+		}
+	],
+	"settings": {}
+}

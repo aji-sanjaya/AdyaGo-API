@@ -33,8 +33,8 @@
                       v                   v
 +-------------------------------------------------------+
 |                    iDempiere ERP                      |
-|        PostgreSQL Database (192.168.3.50:5432)        |
-|    REST API Engine (https://api-erp.adyawinsa.com)    |
+|        PostgreSQL Database (100.103.195.31:5432)       |
+| REST API Engine (https://adyago-idempiere-13.stampingadyawinsa.com) |
 +-------------------------------------------------------+
 ```
 
@@ -147,10 +147,10 @@ AdyaGo/
    GIN_MODE=debug
 
    # iDempiere REST API
-   IDEMPIERE_API_BASE_URL=https://api-erp.adyawinsa.com/api/v1
+   IDEMPIERE_API_BASE_URL=https://adyago-idempiere-13.stampingadyawinsa.com/api/v1
 
    # iDempiere PostgreSQL Database (Strictly Read-Only)
-   IDEMPIERE_DB_HOST=192.168.3.50
+   IDEMPIERE_DB_HOST=100.103.195.31
    IDEMPIERE_DB_PORT=5432
    IDEMPIERE_DB_USER=your_db_user
    IDEMPIERE_DB_PASSWORD=your_db_password

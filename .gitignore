@@ -20,6 +20,7 @@ Thumbs.db
 .env.*.local
 *.env
 !*.env.example
+!backend/.env
 
 # Go / Backend binaries and outputs
 backend/bin/
