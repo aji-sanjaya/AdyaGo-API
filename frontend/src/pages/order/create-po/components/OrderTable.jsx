@@ -137,6 +137,7 @@ export default function OrderTable({
       maximumFractionDigits: 0,
     }).format(num);
   };
+  const formatIDR = formatCurrency;
 
   const renderSortHeader = (label, field, align = 'left') => {
     const isSorted = currentSortField === field;
@@ -299,7 +300,7 @@ export default function OrderTable({
                   </div>
                 </div>
                 <div className="flex-shrink-0">
-                  {getStatusBadge(po.docstatus)}
+                  {getStatusBadge(po.docstatus, po.status_label)}
                 </div>
               </div>
 
@@ -349,7 +350,7 @@ export default function OrderTable({
                     <Building2 className="w-3 h-3 text-indigo-400" /> Vendor:
                   </span>
                   <span className="font-semibold text-slate-200 truncate max-w-[200px]">
-                    {po.vendor_name || '-'}
+                    {po.bpartner_name || po.vendor_name || '-'}
                   </span>
                 </div>
                 {po.createdby_name && (
