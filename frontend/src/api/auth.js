@@ -65,5 +65,13 @@ export const authApi = {
     });
     return res.data;
   },
+
+  // Authorized Menu Paths for Permission Checking
+  getAuthorizedPaths: async (roleId) => {
+    const res = await apiClient.get('/menus/authorized-paths', {
+      params: { role_id: roleId },
+    });
+    return res.data;
+  },
 };
 

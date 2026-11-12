@@ -20,7 +20,42 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	{
 		menusGroup.GET("", h.GetMenus)
 		menusGroup.GET("/sidebar", h.GetSidebar)
+		menusGroup.GET("/authorized-paths", h.GetAuthorizedPaths)
 	}
+}
+
+func (h *Handler) GetAuthorizedPaths(c *gin.Context) {
+	roleIDStr := c.Query("role_id")
+	if roleIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "role_id query parameter is required.",
+		})
+		return
+	}
+
+	roleID, err := strconv.Atoi(roleIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid role_id query parameter.",
+		})
+		return
+	}
+
+	paths, err := h.service.GetAuthorizedPaths(roleID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    paths,
+	})
 }
 
 func (h *Handler) GetSidebar(c *gin.Context) {

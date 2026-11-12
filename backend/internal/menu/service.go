@@ -140,3 +140,44 @@ func (s *Service) GetSidebarMenus(roleID int, rootID int) ([]SidebarGroup, error
 	return result, nil
 }
 
+func (s *Service) GetAuthorizedPaths(roleID int) ([]string, error) {
+	var paths []string
+
+	// Role 0 (System Administrator) has full access
+	if roleID == 0 {
+		query := `
+			SELECT DISTINCT LOWER(TRIM(m.path)) as path
+			FROM adw_web_portal_menus m
+			WHERE m.isactive = 'Y'
+			  AND m.path IS NOT NULL
+			  AND m.path != ''
+			ORDER BY path
+		`
+		err := s.db.DB.Raw(query).Scan(&paths).Error
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch all menu paths: %w", err)
+		}
+		return paths, nil
+	}
+
+	query := `
+		SELECT DISTINCT LOWER(TRIM(m.path)) as path
+		FROM adw_web_portal_menus m
+		JOIN adw_web_portal_role_menus rm ON m.adw_web_portal_menus_id = rm.adw_web_portal_menus_id
+		WHERE rm.ad_role_id = ?
+		  AND m.isactive = 'Y'
+		  AND rm.isactive = 'Y'
+		  AND m.path IS NOT NULL
+		  AND m.path != ''
+		ORDER BY path
+	`
+
+	err := s.db.DB.Raw(query, roleID).Scan(&paths).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch authorized menu paths: %w", err)
+	}
+
+	return paths, nil
+}
+
+

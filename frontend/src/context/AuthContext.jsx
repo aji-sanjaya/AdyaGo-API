@@ -55,6 +55,88 @@ export function AuthProvider({ children }) {
     }
   });
 
+  const [authorizedPaths, setAuthorizedPaths] = useState(() => {
+    try {
+      if (session?.roleId === undefined || session?.roleId === null) return [];
+      const cached = sessionStorage.getItem(`authorized_paths_${session.roleId}`);
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+
+  // Sync and fetch authorized menu permissions whenever active roleId changes
+  useEffect(() => {
+    let isMounted = true;
+    const roleId = session?.roleId;
+
+    if (roleId === undefined || roleId === null || roleId === '') {
+      setAuthorizedPaths([]);
+      return;
+    }
+
+    const cacheKey = `authorized_paths_${roleId}`;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAuthorizedPaths(parsed);
+        }
+      } catch {}
+    }
+
+    setPermissionsLoading(true);
+    authApi
+      .getAuthorizedPaths(roleId)
+      .then((res) => {
+        if (!isMounted) return;
+        const paths = (res?.data || []).map((p) => String(p).toLowerCase().trim());
+        setAuthorizedPaths(paths);
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify(paths));
+        } catch {}
+      })
+      .catch((err) => {
+        console.error('Failed to load authorized menu permissions:', err);
+      })
+      .finally(() => {
+        if (isMounted) setPermissionsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.roleId]);
+
+  const hasMenuPermission = (pathname) => {
+    if (!pathname) return false;
+    const cleanPath = pathname.toLowerCase().split('?')[0].replace(/\/+$/, '') || '/';
+    // Always permit public / universal dashboard landing routes
+    if (['/home', '/dashboard', '/', '/login', '/select-role'].includes(cleanPath)) {
+      return true;
+    }
+
+    // Role 0 (System Administrator) has full universal menu access
+    if (session?.roleId === 0 || session?.roleId === '0') {
+      return true;
+    }
+
+    // If permissions not yet loaded or empty
+    if (!authorizedPaths || authorizedPaths.length === 0) {
+      return false;
+    }
+
+    // Direct exact match
+    if (authorizedPaths.includes(cleanPath)) {
+      return true;
+    }
+
+    // Subpath match (e.g. /create-po/new or /create-pr/new matches /create-po or /create-pr)
+    return authorizedPaths.some((p) => cleanPath.startsWith(p + '/'));
+  };
+
   // Step 1: Initial Login
   const login = async (username, password, remember = true) => {
     const res = await authApi.login(username, password, remember);
@@ -129,11 +211,15 @@ export function AuthProvider({ children }) {
     clearNotificationCache();
     clearMasterOptionsCache();
     clearOrderMasterOptionsCache();
+    if (session?.roleId !== undefined && session?.roleId !== null) {
+      sessionStorage.removeItem(`authorized_paths_${session.roleId}`);
+    }
     localStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(TEMP_AUTH_KEY);
     setSession(null);
     setTempAuth(null);
+    setAuthorizedPaths([]);
   };
 
   const prepareSwitchRole = () => {
@@ -190,6 +276,9 @@ export function AuthProvider({ children }) {
         isAuthenticated: !!session?.token,
         session,
         tempAuth,
+        authorizedPaths,
+        permissionsLoading,
+        hasMenuPermission,
         login,
         selectContext,
         logout,
