@@ -954,6 +954,17 @@ func (s *Service) UpdateOrder(orderID int, req *UpdateOrderRequest, token string
 
 // 13. Delete Order via iDempiere REST API
 func (s *Service) DeleteOrder(orderID int, token string) error {
+	// Integrity check: do not allow deleting orders that have linked receipts or invoices
+	var linkedCount int
+	checkSQL := `
+		SELECT 
+			(SELECT COUNT(1) FROM m_inout io WHERE io.c_order_id = ? AND io.docstatus NOT IN ('VO', 'RE')) +
+			(SELECT COUNT(1) FROM c_invoice inv WHERE inv.c_order_id = ? AND inv.docstatus NOT IN ('VO', 'RE'))
+	`
+	if err := s.db.DB.Raw(checkSQL, orderID, orderID).Scan(&linkedCount).Error; err == nil && linkedCount > 0 {
+		return fmt.Errorf("cannot delete purchase order because it has linked Material Receipt(s) or Vendor Invoice(s)")
+	}
+
 	if err := s.idempiereClient.DeleteModel(token, "c_order", orderID); err != nil {
 		return fmt.Errorf("failed to delete order in iDempiere: %w", err)
 	}
@@ -1156,6 +1167,19 @@ func (s *Service) UpdateOrderLine(orderID, lineID int, req *UpdateOrderLineReque
 
 // 16. Delete Order Line via iDempiere REST API
 func (s *Service) DeleteOrderLine(orderID, lineID int, token string) error {
+	// Integrity check: do not allow deleting lines that already have material receipts
+	var receiptCount int
+	rcvSQL := `
+		SELECT COUNT(iol.m_inoutline_id)
+		FROM m_inoutline iol
+		JOIN m_inout io ON io.m_inout_id = iol.m_inout_id
+		WHERE iol.c_orderline_id = ?
+		  AND io.docstatus NOT IN ('VO', 'RE')
+	`
+	if err := s.db.DB.Raw(rcvSQL, lineID).Scan(&receiptCount).Error; err == nil && receiptCount > 0 {
+		return fmt.Errorf("cannot delete order line because it is already linked to Material Receipt(s)")
+	}
+
 	if err := s.idempiereClient.DeleteModel(token, "c_orderline", lineID); err != nil {
 		return fmt.Errorf("failed to delete order line in iDempiere: %w", err)
 	}
@@ -1164,11 +1188,42 @@ func (s *Service) DeleteOrderLine(orderID, lineID int, token string) error {
 
 // 17. Process Order Document Action via iDempiere REST API
 func (s *Service) ProcessOrder(orderID int, action, token string) error {
+	// 1. Fetch current status from database
+	var current struct {
+		DocStatus string `gorm:"column:docstatus"`
+	}
+	err := s.db.DB.Raw(`SELECT docstatus FROM c_order WHERE c_order_id = ?`, orderID).Scan(&current).Error
+	if err != nil || current.DocStatus == "" {
+		return fmt.Errorf("purchase order not found")
+	}
+
+	// 2. Validate action based on workflow rules
+	switch action {
+	case "CO":
+		if current.DocStatus != "DR" && current.DocStatus != "IP" && current.DocStatus != "IN" {
+			return fmt.Errorf("action Complete (CO) cannot be executed on document with status %s", current.DocStatus)
+		}
+	case "VO":
+		if current.DocStatus != "DR" && current.DocStatus != "IP" && current.DocStatus != "IN" {
+			return fmt.Errorf("action Void (VO) cannot be executed on document with status %s", current.DocStatus)
+		}
+	case "CL":
+		if current.DocStatus != "CO" {
+			return fmt.Errorf("action Close (CL) cannot be executed on document with status %s", current.DocStatus)
+		}
+	case "RE":
+		if current.DocStatus != "CO" {
+			return fmt.Errorf("action Re-Activate (RE) cannot be executed on document with status %s", current.DocStatus)
+		}
+	default:
+		return fmt.Errorf("unsupported document action: %s", action)
+	}
+
 	payload := map[string]interface{}{
 		"doc-action": action,
 	}
 
-	_, err := s.idempiereClient.PutModel(token, "c_order", orderID, payload)
+	_, err = s.idempiereClient.PutModel(token, "c_order", orderID, payload)
 	if err != nil {
 		return fmt.Errorf("failed to process order in iDempiere: %w", err)
 	}

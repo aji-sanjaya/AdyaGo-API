@@ -28,6 +28,7 @@ export default function OrderLineModal({
   const [description, setDescription] = useState('');
   const [reqLineId, setReqLineId] = useState(null);
   const [reqDocNo, setReqDocNo] = useState('');
+  const [reqRemainingQty, setReqRemainingQty] = useState(null);
   const [uomName, setUomName] = useState('');
   const [uomId, setUomId] = useState(null);
 
@@ -105,7 +106,9 @@ export default function OrderLineModal({
     setProductSearch(reqLine.product_value + ' - ' + reqLine.product_name);
     setReqLineId(reqLine.id);
     setReqDocNo(reqLine.po_number);
-    setQty(String(reqLine.remaining_qty || reqLine.qty || 1));
+    const maxQty = reqLine.remaining_qty != null ? reqLine.remaining_qty : reqLine.qty;
+    setReqRemainingQty(maxQty);
+    setQty(String(maxQty || 1));
     if (reqLine.price > 0) {
       setPrice(String(reqLine.price));
     }
@@ -140,6 +143,10 @@ export default function OrderLineModal({
     }
     if (numQty <= 0) {
       setError('Quantity must be greater than zero.');
+      return;
+    }
+    if (reqLineId && reqRemainingQty != null && numQty > reqRemainingQty) {
+      setError(`Quantity cannot exceed the available Requisition remaining quantity (${reqRemainingQty}).`);
       return;
     }
     if (numPrice <= 0 && itemType === 'product') {

@@ -38,6 +38,7 @@ import {
   PackageCheck,
   Building2,
   Calendar,
+  Image,
 } from 'lucide-react';
 import { idempiereConfig } from '../../../config/idempiere';
 import { useAuth } from '../../../context/AuthContext';
@@ -57,6 +58,7 @@ import OrderChatTab from './components/OrderChatTab';
 import OrderChangeLogTab from './components/OrderChangeLogTab';
 import PrintPreviewModal from './components/PrintPreviewModal';
 import InvalidDocumentState from '../../../components/common/InvalidDocumentState';
+import PdfJsViewer from '../../../components/common/PdfJsViewer';
 
 const normalizeOptions = (raw) => {
   if (!raw) return {};
@@ -202,6 +204,9 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
   const [attachmentError, setAttachmentError] = useState(null);
   const [attachmentPendingDelete, setAttachmentPendingDelete] = useState(null);
   const [deletingAttachment, setDeletingAttachment] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+  const [loadingPdf, setLoadingPdf] = useState(false);
   const fileInputRef = useRef(null);
 
   // Tab counts
@@ -560,6 +565,74 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
     }
   };
 
+  const handleReauthSuccess = async (newToken) => {
+    setShowReauthModal(false);
+    setError(null);
+    setSuccessMessage('Token refreshed! Resuming and saving changes...');
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        org_id: Number(orgId),
+        ad_org_id: Number(orgId),
+        warehouse_id: Number(warehouseId),
+        m_warehouse_id: Number(warehouseId),
+        doc_type_id: Number(docTypeTargetId) || idempiereConfig.createPo.defaults.docTypeId,
+        c_doctypetarget_id: Number(docTypeTargetId) || idempiereConfig.createPo.defaults.docTypeId,
+        date_ordered: dateOrdered,
+        dateordered: dateOrdered,
+        date_promised: datePromised,
+        datepromised: datePromised,
+        c_bpartner_id: Number(vendorId),
+        c_bpartner_location_id: vendorContactId ? Number(vendorContactId) : undefined,
+        ad_user_id: vendorContactId ? Number(vendorContactId) : undefined,
+        pricelist_id: Number(pricelistId) || idempiereConfig.createPo.defaults.pricelistId,
+        m_pricelist_id: Number(pricelistId) || idempiereConfig.createPo.defaults.pricelistId,
+        c_paymentterm_id: paymentTermId ? Number(paymentTermId) : undefined,
+        paymentrule: paymentRule || idempiereConfig.createPo.defaults.paymentRule,
+        priority_rule: priorityRule || idempiereConfig.createPo.defaults.priorityRule,
+        priorityrule: priorityRule || idempiereConfig.createPo.defaults.priorityRule,
+        c_tax_id: taxId ? Number(taxId) : undefined,
+        c_costcenter_id: costCenterId ? Number(costCenterId) : undefined,
+        c_project_id: projectId ? Number(projectId) : undefined,
+        adw_ad_user_checked_id: checkedById ? Number(checkedById) : undefined,
+        checkedby_id: checkedById ? Number(checkedById) : undefined,
+        adw_ad_user_approved_id: approvedById ? Number(approvedById) : undefined,
+        approvedby_id: approvedById ? Number(approvedById) : undefined,
+        description: description.trim(),
+      };
+
+      if (isNew) {
+        const res = await orderApi.createOrder(payload, newToken);
+        const newId = res.data?.id;
+        setSuccessMessage('Purchase Order created successfully!');
+        if (newId) {
+          const encId = encryptDocumentId(String(newId));
+          navigate(`/create-po?documentID=${encId}`, { replace: true });
+        } else {
+          navigate('/create-po', { replace: true });
+        }
+      } else {
+        await orderApi.updateOrder(targetId, payload, newToken);
+        setSuccessMessage('Purchase Order header updated successfully.');
+        setTimeout(() => setSuccessMessage(null), 4000);
+        const detailRes = await orderApi.getOrder(targetId);
+        if (detailRes && detailRes.data) {
+          applyRecordData(detailRes.data.header, detailRes.data.lines, true);
+        }
+      }
+    } catch (retryErr) {
+      console.error('Retry save failed:', retryErr);
+      setError(
+        retryErr.response?.data?.message ||
+          retryErr.message ||
+          'Failed to save purchase order after token refresh.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Line saved callback
   const handleLineSaved = async (mode) => {
     if (!targetId) return;
@@ -701,11 +774,16 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
 
   const handleFileUpload = async (e) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || !targetId) return;
     const file = files[0];
 
+    if (isReadOnly) {
+      setAttachmentError('Cannot upload attachments to a completed or read-only purchase order.');
+      return;
+    }
+
     if (file.size > 10 * 1024 * 1024) {
-      setAttachmentError('File size exceeds the 10 MB limit.');
+      setAttachmentError('Security validation failed: File size exceeds the maximum allowed limit of 10MB.');
       return;
     }
 
@@ -742,15 +820,15 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
 
   const handleDeleteAttachment = async () => {
     if (!targetId || !attachmentPendingDelete) return;
+    const fileName = attachmentPendingDelete.file_name || attachmentPendingDelete.filename;
     setDeletingAttachment(true);
     try {
       await orderApi.deleteAttachment(
         targetId,
-        attachmentPendingDelete.attachment_id || attachmentPendingDelete.id,
-        attachmentPendingDelete.filename,
+        fileName,
         session?.token
       );
-      setSuccessMessage(`Attachment "${attachmentPendingDelete.filename}" deleted.`);
+      setSuccessMessage(`Attachment "${fileName}" deleted.`);
       setTimeout(() => setSuccessMessage(null), 4000);
       setAttachmentPendingDelete(null);
       await loadAttachments();
@@ -766,6 +844,76 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       setDeletingAttachment(false);
     }
   };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes || isNaN(bytes)) return '0 B';
+    const num = Number(bytes);
+    if (num < 1024) return `${num} B`;
+    if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
+    return `${(num / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const formatAttachmentDate = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  useEffect(() => {
+    const isPdf =
+      previewAttachment?.is_pdf ||
+      (previewAttachment?.file_name || previewAttachment?.filename || '').toLowerCase().endsWith('.pdf');
+    if (previewAttachment && isPdf) {
+      let active = true;
+      setLoadingPdf(true);
+      const fileName = previewAttachment.file_name || previewAttachment.filename;
+      const url = orderApi.getAttachmentDownloadUrl(targetId, fileName, false);
+      fetch(url)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+          return res.blob();
+        })
+        .then((blob) => {
+          if (!active) return;
+          const blobUrl = URL.createObjectURL(blob);
+          setPdfBlobUrl(blobUrl);
+        })
+        .catch((err) => {
+          console.error('Failed to load PDF preview as blob, falling back to direct URL:', err);
+          if (active) setPdfBlobUrl(url);
+        })
+        .finally(() => {
+          if (active) setLoadingPdf(false);
+        });
+
+      return () => {
+        active = false;
+        setPdfBlobUrl((prev) => {
+          if (prev && prev.startsWith('blob:')) {
+            URL.revokeObjectURL(prev);
+          }
+          return null;
+        });
+      };
+    } else {
+      setPdfBlobUrl((prev) => {
+        if (prev && prev.startsWith('blob:')) {
+          URL.revokeObjectURL(prev);
+        }
+        return null;
+      });
+    }
+  }, [previewAttachment, targetId]);
 
   // Tab change handler
   const handleTabChange = async (newTab) => {
@@ -2295,12 +2443,26 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
             {/* TAB CONTENT: ATTACHMENTS */}
             {!tabLoading && activeTab === 'attachments' && !isNew && (
               <div className="p-6 sm:p-8 space-y-4">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
+                <div
+                  className={`flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl border ${
+                    isDark
+                      ? 'bg-slate-950/40 border-slate-800'
+                      : 'bg-slate-50/80 border-slate-200 shadow-xs'
+                  }`}
+                >
                   <div>
-                    <h4 className="text-xs font-mono font-bold text-slate-200 uppercase tracking-wider">
+                    <h4
+                      className={`text-xs font-mono font-bold uppercase tracking-wider ${
+                        isDark ? 'text-slate-200' : 'text-slate-800'
+                      }`}
+                    >
                       Document Attachments ({attachments.length})
                     </h4>
-                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                    <p
+                      className={`text-[11px] font-mono mt-0.5 ${
+                        isDark ? 'text-slate-400' : 'text-slate-500'
+                      }`}
+                    >
                       Upload specifications, quotes, or contracts (max 10MB)
                     </p>
                   </div>
@@ -2337,57 +2499,146 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   {loadingAttachments ? (
                     <div className="col-span-full py-12 text-center text-slate-400 font-mono">
                       <Loader2 className="w-6 h-6 animate-spin mx-auto text-cyan-400 mb-2" />
                       <span>Loading attachments...</span>
                     </div>
                   ) : attachments.length === 0 ? (
-                    <div className="col-span-full py-12 text-center text-slate-500 font-mono border border-slate-800 rounded-xl">
+                    <div
+                      className={`col-span-full py-12 text-center font-mono border rounded-xl ${
+                        isDark
+                          ? 'border-slate-800 text-slate-500 bg-slate-900/30'
+                          : 'border-slate-200 text-slate-500 bg-slate-50/50'
+                      }`}
+                    >
                       <Paperclip className="w-8 h-8 mx-auto mb-2 opacity-30" />
                       <span>No attachments found for this purchase order.</span>
                     </div>
                   ) : (
-                    attachments.map((att, idx) => (
-                      <div
-                        key={att.id || att.attachment_id || idx}
-                        className="bg-slate-900/60 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between gap-3 font-mono"
-                      >
-                        <div className="flex items-center gap-2.5 overflow-hidden">
-                          <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
-                            <File className="w-4 h-4" />
-                          </div>
-                          <div className="overflow-hidden">
-                            <p className="text-xs font-bold text-slate-200 truncate">{att.filename}</p>
-                            <p className="text-[10px] text-slate-500">
-                              {att.filesize ? `${(att.filesize / 1024).toFixed(1)} KB` : ''}
-                            </p>
-                          </div>
-                        </div>
+                    attachments.map((att, idx) => {
+                      const fileName = att.file_name || att.filename || 'Attachment';
+                      const fileSize = att.file_size || att.filesize || 0;
+                      const isPdf = att.is_pdf || fileName.toLowerCase().endsWith('.pdf');
+                      const isImg =
+                        att.is_image ||
+                        ['.jpg', '.jpeg', '.png', '.webp', '.gif'].some((ext) =>
+                          fileName.toLowerCase().endsWith(ext)
+                        );
+                      const createdAt = att.created_at || att.created;
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => orderApi.downloadAttachment(targetId, att.filename)}
-                            className="p-1.5 rounded-lg border border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
-                            title="Download"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                          {!isReadOnly && (
+                      return (
+                        <div
+                          key={att.id || att.attachment_id || idx}
+                          className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 font-mono transition-all ${
+                            isDark
+                              ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                              : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
+                          }`}
+                        >
+                          {/* File Icon & Info */}
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                isPdf
+                                  ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                                  : isImg
+                                  ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                                  : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                              }`}
+                            >
+                              {isPdf ? (
+                                <FileText className="w-5 h-5" />
+                              ) : isImg ? (
+                                <Image className="w-5 h-5" />
+                              ) : (
+                                <File className="w-5 h-5" />
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className={`text-xs font-bold truncate ${
+                                  isDark ? 'text-slate-200' : 'text-slate-800'
+                                }`}
+                                title={fileName}
+                              >
+                                {fileName}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                                <span className="font-semibold text-slate-400 dark:text-slate-500">
+                                  {formatFileSize(fileSize)}
+                                </span>
+                                {createdAt && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{formatAttachmentDate(createdAt)}</span>
+                                  </>
+                                )}
+                                {isPdf && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                    PDF
+                                  </span>
+                                )}
+                                {isImg && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                                    IMAGE
+                                  </span>
+                                )}
+                              </div>
+                              {att.description && (
+                                <p className="text-[10px] text-slate-500 italic truncate mt-0.5">
+                                  {att.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Actions: Preview, Download, Delete */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {/* Preview button with Eye icon */}
                             <button
                               type="button"
-                              onClick={() => setAttachmentPendingDelete(att)}
-                              className="p-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
-                              title="Delete"
+                              onClick={() => setPreviewAttachment(att)}
+                              className={`p-2 rounded-lg border transition cursor-pointer ${
+                                isDark
+                                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-cyan-400'
+                                  : 'border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-cyan-600'
+                              }`}
+                              title="Preview Attachment"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Eye className="w-3.5 h-3.5" />
                             </button>
-                          )}
+
+                            {/* Download button */}
+                            <button
+                              type="button"
+                              onClick={() => orderApi.downloadAttachment(targetId, fileName)}
+                              className={`p-2 rounded-lg border transition cursor-pointer ${
+                                isDark
+                                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white'
+                                  : 'border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+                              }`}
+                              title="Download Attachment"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+
+                            {!isReadOnly && (
+                              <button
+                                type="button"
+                                onClick={() => setAttachmentPendingDelete(att)}
+                                className="p-2 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
+                                title="Delete Attachment"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -2451,13 +2702,151 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
         loading={deletingLineId === linePendingDelete?.id}
       />
 
+      {/* Preview Attachment Modal */}
+      {previewAttachment && (() => {
+        const fileName = previewAttachment.file_name || previewAttachment.filename;
+        const fileSize = previewAttachment.file_size || previewAttachment.filesize;
+        const isPdf =
+          previewAttachment.is_pdf ||
+          (fileName || '').toLowerCase().endsWith('.pdf');
+        const isImage =
+          previewAttachment.is_image ||
+          ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg'].some((ext) =>
+            (fileName || '').toLowerCase().endsWith(ext)
+          );
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 font-mono">
+            <div
+              className={`w-full ${
+                isPdf ? 'max-w-6xl h-[92vh]' : 'max-w-4xl max-h-[90vh]'
+              } flex flex-col rounded-2xl border shadow-2xl overflow-hidden transition-all ${
+                isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
+              }`}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center flex-shrink-0">
+                    <Eye className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className={`text-xs font-bold truncate ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+                      {fileName}
+                    </h3>
+                    <span className="text-[10px] text-slate-400">
+                      {formatFileSize(fileSize)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      orderApi.downloadAttachment(
+                        targetId,
+                        fileName
+                      )
+                    }
+                    className={`p-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                    title="Download File"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Download</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewAttachment(null)}
+                    className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                        : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                    }`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div
+                className={`flex-1 min-h-0 flex flex-col ${
+                  isPdf
+                    ? 'p-0 overflow-hidden w-full h-full'
+                    : 'p-4 overflow-auto items-center justify-center bg-slate-950/20 min-h-[300px]'
+                }`}
+              >
+                {isImage ? (
+                  <img
+                    src={orderApi.getAttachmentDownloadUrl(
+                      targetId,
+                      fileName,
+                      false
+                    )}
+                    alt={fileName}
+                    className="max-h-[70vh] max-w-full object-contain rounded-lg shadow-md mx-auto"
+                  />
+                ) : isPdf ? (
+                  loadingPdf ? (
+                    <div className="flex-1 w-full h-full flex flex-col items-center justify-center space-y-3 text-slate-400 font-mono">
+                      <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+                      <span className="text-xs font-semibold">Loading PDF preview...</span>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex-1 min-h-0">
+                      <PdfJsViewer
+                        url={
+                          pdfBlobUrl ||
+                          orderApi.getAttachmentDownloadUrl(
+                            targetId,
+                            fileName,
+                            false
+                          )
+                        }
+                        fileName={fileName}
+                      />
+                    </div>
+                  )
+                ) : (
+                  <div className="py-16 text-center space-y-4 font-mono">
+                    <File className="w-16 h-16 mx-auto text-slate-400 opacity-50" />
+                    <p className="text-xs text-slate-400">
+                      Preview is not supported for this file type directly in the browser.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        orderApi.downloadAttachment(
+                          targetId,
+                          fileName
+                        )
+                      }
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-900 hover:bg-cyan-400 transition cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Download {fileName}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Delete Attachment Modal */}
       <ConfirmDeleteModal
         isOpen={!!attachmentPendingDelete}
-        onClose={() => setAttachmentPendingDelete(null)}
+        onClose={() => !deletingAttachment && setAttachmentPendingDelete(null)}
         onConfirm={handleDeleteAttachment}
-        title="Delete Attachment"
-        message={`Are you sure you want to delete "${attachmentPendingDelete?.filename}"?`}
+        title="Delete Attachment?"
+        message="Are you sure you want to remove this attached file from iDempiere? This action cannot be undone."
+        itemName={attachmentPendingDelete?.file_name || attachmentPendingDelete?.filename || ''}
         loading={deletingAttachment}
       />
 
@@ -2720,10 +3109,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
         <ReauthModal
           isOpen={showReauthModal}
           onClose={() => setShowReauthModal(false)}
-          onSuccess={() => {
-            setShowReauthModal(false);
-            setInvalidToken(false);
-          }}
+          onSuccess={handleReauthSuccess}
         />
       )}
     </ModuleLayout>

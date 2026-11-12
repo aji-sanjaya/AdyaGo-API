@@ -2666,181 +2666,110 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
 
             {/* Tab Content: Attachments Tab */}
             {activeTab === 'attachments' && (
-              <div className="p-4 sm:p-6 space-y-6 font-mono">
-                {/* Upload Zone (Drag & Drop + Browse) */}
-                {!isReadOnly && (
-                  <div
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleFileUpload(e);
-                    }}
-                    className={`border-2 border-dashed rounded-xl p-6 sm:p-8 text-center transition-all ${
-                      uploadingAttachment
-                        ? 'opacity-60 pointer-events-none'
-                        : isDark
-                        ? 'border-slate-700 hover:border-cyan-500/60 bg-slate-950/30 hover:bg-slate-900/50'
-                        : 'border-slate-300 hover:border-cyan-500/60 bg-slate-50/60 hover:bg-cyan-50/30'
-                    }`}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                      disabled={uploadingAttachment}
-                    />
-                    <div className="flex flex-col items-center justify-center space-y-3">
-                      <div
-                        className={`p-3 rounded-full ${
-                          isDark
-                            ? 'bg-cyan-500/10 text-cyan-400'
-                            : 'bg-cyan-50 text-cyan-600'
-                        }`}
-                      >
-                        {uploadingAttachment ? (
-                          <Loader2 className="w-8 h-8 animate-spin" />
-                        ) : (
-                          <UploadCloud className="w-8 h-8" />
-                        )}
-                      </div>
-                      <div>
-                        <p
-                          className={`text-sm font-semibold ${
-                            isDark ? 'text-slate-200' : 'text-slate-800'
-                          }`}
-                        >
-                          {uploadingAttachment ? (
-                            'Uploading attachment to iDempiere...'
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="text-cyan-500 hover:text-cyan-400 underline underline-offset-2 cursor-pointer font-bold"
-                              >
-                                Click to upload
-                              </button>{' '}
-                              or drag and drop file here
-                            </>
-                          )}
-                        </p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          Supports PDF, PNG, JPG, JPEG, WEBP (Max 10 MB per file)
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Attachment Error message */}
-                {attachmentError && (
-                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                      <span>{attachmentError}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setAttachmentError(null)}
-                      className="text-rose-400 hover:text-rose-300"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Header bar of Attachment List */}
-                <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center gap-2">
+              <div className="p-6 sm:p-8 space-y-4">
+                <div
+                  className={`flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl border ${
+                    isDark
+                      ? 'bg-slate-950/40 border-slate-800'
+                      : 'bg-slate-50/80 border-slate-200 shadow-xs'
+                  }`}
+                >
+                  <div>
                     <h4
-                      className={`text-xs font-bold uppercase tracking-wider ${
+                      className={`text-xs font-mono font-bold uppercase tracking-wider ${
                         isDark ? 'text-slate-200' : 'text-slate-800'
                       }`}
                     >
-                      Uploaded Attachments
+                      Document Attachments ({attachments.length})
                     </h4>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
-                      {attachments.length} {attachments.length === 1 ? 'file' : 'files'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={loadAttachments}
-                    disabled={loadingAttachments}
-                    title="Refresh attachments list"
-                    className={`p-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <RefreshCw
-                      className={`w-3.5 h-3.5 ${
-                        loadingAttachments ? 'animate-spin' : ''
-                      }`}
-                    />
-                    <span className="hidden sm:inline">Refresh</span>
-                  </button>
-                </div>
-
-                {/* List / Cards of Attachments */}
-                {loadingAttachments ? (
-                  <div className="py-12 flex flex-col items-center justify-center space-y-2 text-slate-400">
-                    <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
-                    <span className="text-xs">
-                      Loading attachments from iDempiere...
-                    </span>
-                  </div>
-                ) : attachments.length === 0 ? (
-                  <div className="py-12 text-center space-y-2">
-                    <Paperclip className="w-8 h-8 mx-auto text-slate-400 opacity-40" />
                     <p
-                      className={`text-xs font-semibold ${
-                        isDark ? 'text-slate-400' : 'text-slate-600'
+                      className={`text-[11px] font-mono mt-0.5 ${
+                        isDark ? 'text-slate-400' : 'text-slate-500'
                       }`}
                     >
-                      No attachments uploaded yet
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      Upload supporting documents, receipts, quotes, or specifications for this requisition.
+                      Upload specifications, quotes, or contracts (max 10MB)
                     </p>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {attachments.map((att, idx) => {
-                      const isImg = att.is_image;
-                      const isPdf = att.is_pdf;
-                      const forceDownloadUrl =
-                        requisitionApi.getAttachmentDownloadUrl(
-                          targetId,
-                          att.file_name,
-                          true
+
+                  {!isReadOnly && (
+                    <div>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingAttachment}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-mono font-bold shadow-md shadow-indigo-500/20 transition cursor-pointer disabled:opacity-50"
+                      >
+                        {uploadingAttachment ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="w-3.5 h-3.5" />
+                        )}
+                        <span>Upload File</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {attachmentError && (
+                  <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-mono">
+                    {attachmentError}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {loadingAttachments ? (
+                    <div className="col-span-full py-12 text-center text-slate-400 font-mono">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto text-cyan-400 mb-2" />
+                      <span>Loading attachments...</span>
+                    </div>
+                  ) : attachments.length === 0 ? (
+                    <div
+                      className={`col-span-full py-12 text-center font-mono border rounded-xl ${
+                        isDark
+                          ? 'border-slate-800 text-slate-500 bg-slate-900/30'
+                          : 'border-slate-200 text-slate-500 bg-slate-50/50'
+                      }`}
+                    >
+                      <Paperclip className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      <span>No attachments found for this requisition.</span>
+                    </div>
+                  ) : (
+                    attachments.map((att, idx) => {
+                      const fileName = att.file_name || att.filename || 'Attachment';
+                      const fileSize = att.file_size || att.filesize || 0;
+                      const isPdf = att.is_pdf || fileName.toLowerCase().endsWith('.pdf');
+                      const isImg =
+                        att.is_image ||
+                        ['.jpg', '.jpeg', '.png', '.webp', '.gif'].some((ext) =>
+                          fileName.toLowerCase().endsWith(ext)
                         );
+                      const createdAt = att.created_at || att.created;
 
                       return (
                         <div
-                          key={idx}
-                          className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 transition-all ${
+                          key={att.id || att.attachment_id || idx}
+                          className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 font-mono transition-all ${
                             isDark
-                              ? 'bg-slate-800/60 border-slate-700/80 hover:border-slate-600'
-                              : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+                              ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                              : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
                           }`}
                         >
                           {/* File Icon & Info */}
-                          <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
                             <div
-                              className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                                 isPdf
                                   ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
                                   : isImg
                                   ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                                  : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                  : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
                               }`}
                             >
                               {isPdf ? (
@@ -2852,70 +2781,90 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                               )}
                             </div>
 
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <p
                                 className={`text-xs font-bold truncate ${
                                   isDark ? 'text-slate-200' : 'text-slate-800'
                                 }`}
-                                title={att.file_name}
+                                title={fileName}
                               >
-                                {att.file_name}
+                                {fileName}
                               </p>
-                              <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                                <span>{formatFileSize(att.file_size)}</span>
-                                <span>•</span>
-                                <span>{formatAttachmentDate(att.created_at)}</span>
+                              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                                <span className="font-semibold text-slate-400 dark:text-slate-500">
+                                  {formatFileSize(fileSize)}
+                                </span>
+                                {createdAt && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{formatAttachmentDate(createdAt)}</span>
+                                  </>
+                                )}
+                                {isPdf && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                    PDF
+                                  </span>
+                                )}
+                                {isImg && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                                    IMAGE
+                                  </span>
+                                )}
                               </div>
+                              {att.description && (
+                                <p className="text-[10px] text-slate-500 italic truncate mt-0.5">
+                                  {att.description}
+                                </p>
+                              )}
                             </div>
                           </div>
 
-                          {/* Actions */}
+                          {/* Actions: Preview, Download, Delete */}
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            {/* Preview / View button */}
+                            {/* Preview button with Eye icon */}
                             <button
                               type="button"
                               onClick={() => setPreviewAttachment(att)}
-                              title="Preview"
-                              className={`p-2 rounded-lg transition cursor-pointer ${
+                              className={`p-2 rounded-lg border transition cursor-pointer ${
                                 isDark
-                                  ? 'text-slate-300 hover:text-cyan-400 hover:bg-slate-700/60'
-                                  : 'text-slate-600 hover:text-cyan-600 hover:bg-slate-100'
+                                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-cyan-400'
+                                  : 'border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-cyan-600'
                               }`}
+                              title="Preview Attachment"
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* Direct Download button */}
+                            {/* Download button */}
                             <a
-                              href={forceDownloadUrl}
-                              download={att.file_name}
-                              title="Download File"
-                              className={`p-2 rounded-lg transition cursor-pointer ${
+                              href={requisitionApi.getAttachmentDownloadUrl(targetId, fileName, true)}
+                              download={fileName}
+                              className={`p-2 rounded-lg border transition cursor-pointer ${
                                 isDark
-                                  ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-700/60'
-                                  : 'text-slate-600 hover:text-emerald-600 hover:bg-slate-100'
+                                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white'
+                                  : 'border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900'
                               }`}
+                              title="Download Attachment"
                             >
-                              <Download className="w-4 h-4" />
+                              <Download className="w-3.5 h-3.5" />
                             </a>
 
-                            {/* Delete button (only when editable) */}
                             {!isReadOnly && (
                               <button
                                 type="button"
                                 onClick={() => setAttachmentPendingDelete(att)}
+                                className="p-2 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
                                 title="Delete Attachment"
-                                className="p-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition cursor-pointer"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
                         </div>
                       );
-                    })}
-                  </div>
-                )}
+                    })
+                  )}
+                </div>
               </div>
             )}
 
@@ -3033,137 +2982,158 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
       />
 
       {/* Attachment Preview Modal */}
-      {previewAttachment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div
-            className={`w-full max-w-4xl max-h-[90vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden font-mono ${
-              isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-            }`}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Paperclip className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-                <div className="min-w-0">
-                  <h3
-                    className={`text-xs font-bold truncate ${
-                      isDark ? 'text-slate-200' : 'text-slate-800'
-                    }`}
-                  >
-                    {previewAttachment.file_name}
-                  </h3>
-                  <span className="text-[10px] text-slate-400">
-                    {formatFileSize(previewAttachment.file_size)} • {formatAttachmentDate(previewAttachment.created_at)}
-                  </span>
+      {previewAttachment && (() => {
+        const isPdf =
+          previewAttachment.is_pdf ||
+          (previewAttachment.file_name || previewAttachment.filename || '').toLowerCase().endsWith('.pdf');
+        const isImage =
+          previewAttachment.is_image ||
+          ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg'].some((ext) =>
+            (previewAttachment.file_name || previewAttachment.filename || '').toLowerCase().endsWith(ext)
+          );
+        const fileName = previewAttachment.file_name || previewAttachment.filename;
+        const fileSize = previewAttachment.file_size || previewAttachment.filesize;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <div
+              className={`w-full ${
+                isPdf ? 'max-w-6xl h-[92vh]' : 'max-w-4xl max-h-[90vh]'
+              } rounded-2xl border shadow-2xl flex flex-col overflow-hidden font-mono transition-all ${
+                isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
+              }`}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Paperclip className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <h3
+                      className={`text-xs font-bold truncate ${
+                        isDark ? 'text-slate-200' : 'text-slate-800'
+                      }`}
+                    >
+                      {fileName}
+                    </h3>
+                    <span className="text-[10px] text-slate-400">
+                      {formatFileSize(fileSize)} • {formatAttachmentDate(previewAttachment.created_at)}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <a
-                  href={requisitionApi.getAttachmentDownloadUrl(
-                    targetId,
-                    previewAttachment.file_name,
-                    false
-                  )}
-                  target="_blank"
-                  rel="noreferrer"
-                  title="Open in new window"
-                  className={`p-1.5 rounded-lg border transition ${
-                    isDark
-                      ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-                <a
-                  href={requisitionApi.getAttachmentDownloadUrl(
-                    targetId,
-                    previewAttachment.file_name,
-                    true
-                  )}
-                  download={previewAttachment.file_name}
-                  title="Download file"
-                  className={`p-1.5 rounded-lg border transition ${
-                    isDark
-                      ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <Download className="w-4 h-4" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setPreviewAttachment(null)}
-                  title="Close preview"
-                  className={`p-1.5 rounded-lg border transition cursor-pointer ${
-                    isDark
-                      ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                      : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-                  }`}
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-950/20">
-              {previewAttachment.is_image ? (
-                <img
-                  src={requisitionApi.getAttachmentDownloadUrl(
-                    targetId,
-                    previewAttachment.file_name,
-                    false
-                  )}
-                  alt={previewAttachment.file_name}
-                  className="max-h-[70vh] max-w-full object-contain rounded-lg shadow-md"
-                />
-              ) : previewAttachment.is_pdf ? (
-                loadingPdf ? (
-                  <div className="py-24 flex flex-col items-center justify-center space-y-3 text-slate-400">
-                    <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-                    <span className="text-xs font-semibold">Loading PDF preview...</span>
-                  </div>
-                ) : (
-                  <div className="w-full h-[75vh] rounded-xl overflow-hidden border border-slate-700/50">
-                    <PdfJsViewer
-                      url={
-                        pdfBlobUrl ||
-                        requisitionApi.getAttachmentDownloadUrl(
-                          targetId,
-                          previewAttachment.file_name,
-                          false
-                        )
-                      }
-                      fileName={previewAttachment.file_name}
-                    />
-                  </div>
-                )
-              ) : (
-                <div className="py-16 text-center space-y-4">
-                  <File className="w-16 h-16 mx-auto text-slate-400 opacity-50" />
-                  <p className="text-xs text-slate-400">
-                    Preview is not supported for this file type directly in the browser.
-                  </p>
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <a
                     href={requisitionApi.getAttachmentDownloadUrl(
                       targetId,
-                      previewAttachment.file_name,
+                      fileName,
+                      false
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open in new window"
+                    className={`p-1.5 rounded-lg border transition ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                  <a
+                    href={requisitionApi.getAttachmentDownloadUrl(
+                      targetId,
+                      fileName,
                       true
                     )}
-                    download={previewAttachment.file_name}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-900 hover:bg-cyan-400 transition"
+                    download={fileName}
+                    title="Download file"
+                    className={`p-1.5 rounded-lg border transition ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
                   >
                     <Download className="w-4 h-4" />
-                    Download {previewAttachment.file_name}
                   </a>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewAttachment(null)}
+                    title="Close preview"
+                    className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                        : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                    }`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              )}
+              </div>
+
+              {/* Modal Body */}
+              <div
+                className={`flex-1 min-h-0 flex flex-col ${
+                  isPdf
+                    ? 'p-0 overflow-hidden w-full h-full'
+                    : 'p-4 overflow-auto items-center justify-center bg-slate-950/20'
+                }`}
+              >
+                {isImage ? (
+                  <img
+                    src={requisitionApi.getAttachmentDownloadUrl(
+                      targetId,
+                      fileName,
+                      false
+                    )}
+                    alt={fileName}
+                    className="max-h-[70vh] max-w-full object-contain rounded-lg shadow-md"
+                  />
+                ) : isPdf ? (
+                  loadingPdf ? (
+                    <div className="flex-1 w-full h-full flex flex-col items-center justify-center space-y-3 text-slate-400 font-mono">
+                      <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+                      <span className="text-xs font-semibold">Loading PDF preview...</span>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex-1 min-h-0">
+                      <PdfJsViewer
+                        url={
+                          pdfBlobUrl ||
+                          requisitionApi.getAttachmentDownloadUrl(
+                            targetId,
+                            fileName,
+                            false
+                          )
+                        }
+                        fileName={fileName}
+                      />
+                    </div>
+                  )
+                ) : (
+                  <div className="py-16 text-center space-y-4">
+                    <File className="w-16 h-16 mx-auto text-slate-400 opacity-50" />
+                    <p className="text-xs text-slate-400">
+                      Preview is not supported for this file type directly in the browser.
+                    </p>
+                    <a
+                      href={requisitionApi.getAttachmentDownloadUrl(
+                        targetId,
+                        fileName,
+                        true
+                      )}
+                      download={fileName}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-900 hover:bg-cyan-400 transition"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download {fileName}
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Confirm Delete Document Modal */}
       <ConfirmDeleteModal

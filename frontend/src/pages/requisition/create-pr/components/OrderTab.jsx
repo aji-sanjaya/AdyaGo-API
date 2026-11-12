@@ -311,7 +311,104 @@ export default function OrderTab({ targetId, isDark, onTotalOrdersChange }) {
                       </div>
                     )}
 
-                    <div className="overflow-x-auto">
+                    {/* Mobile Lines Card View (Visible only on small screens: < md) */}
+                    <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {order.lines && order.lines.length > 0 ? (
+                        order.lines.map((item, idx) => (
+                          <div
+                            key={item.id || idx}
+                            className={`p-3.5 space-y-2.5 transition-colors ${
+                              isDark ? 'bg-slate-900/40 hover:bg-slate-800/40' : 'bg-white hover:bg-slate-50/80'
+                            }`}
+                          >
+                            {/* Card Header: Line # & PR Line badge */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="px-2 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-[10px] font-mono font-bold flex-shrink-0">
+                                  #{item.line || idx + 1}
+                                </span>
+                                {item.product_code && (
+                                  <span className="font-mono text-xs font-semibold text-slate-400 truncate">
+                                    {item.product_code}
+                                  </span>
+                                )}
+                              </div>
+                              {item.requisition_line && (
+                                <span className="inline-flex items-center gap-1 text-[10px] bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-md font-mono flex-shrink-0">
+                                  PR Line #{item.requisition_line}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Product Name & Description */}
+                            <div>
+                              <h4 className={`text-xs sm:text-sm font-mono font-bold leading-tight ${
+                                isDark ? 'text-slate-100' : 'text-slate-900'
+                              }`}>
+                                {item.product_name || 'Line Item'}
+                              </h4>
+                              {item.description && (
+                                <p className="text-[11px] font-mono text-slate-400 mt-1 line-clamp-2">
+                                  {item.description}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Metrics Grid: Qty Ordered, Qty Delivered */}
+                            <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                              {/* Qty Ordered */}
+                              <div
+                                className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                  Qty Ordered
+                                </span>
+                                <span className={`font-bold text-xs ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                  {Number(item.qtyordered).toLocaleString('en-US', {
+                                    minimumFractionDigits: item.uom_precision ?? 0,
+                                    maximumFractionDigits: item.uom_precision ?? 0,
+                                  })}{' '}
+                                  <span className="text-cyan-400 font-semibold">
+                                    {item.uom_name || ''}
+                                  </span>
+                                </span>
+                              </div>
+
+                              {/* Qty Delivered */}
+                              <div
+                                className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                  Qty Delivered
+                                </span>
+                                <span className={`font-bold text-xs ${
+                                  Number(item.qtydelivered || 0) > 0 ? 'text-emerald-400' : isDark ? 'text-slate-200' : 'text-slate-800'
+                                }`}>
+                                  {Number(item.qtydelivered || 0).toLocaleString('en-US', {
+                                    minimumFractionDigits: item.uom_precision ?? 0,
+                                    maximumFractionDigits: item.uom_precision ?? 0,
+                                  })}{' '}
+                                  <span className="text-cyan-400 font-semibold">
+                                    {item.uom_name || ''}
+                                  </span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-slate-400 text-xs font-mono italic">
+                          No line items associated with this purchase order.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Desktop / Tablet Table View (Visible only on md+ screens) */}
+                    <div className="hidden md:block overflow-x-auto">
                       <table className="w-full text-left border-collapse text-xs font-mono">
                         <thead>
                           <tr
