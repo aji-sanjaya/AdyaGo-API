@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -601,7 +602,8 @@ func (h *Handler) SendChatMessage(c *gin.Context) {
 		defer file.Close()
 		fb, err := io.ReadAll(file)
 		if err == nil && len(fb) > 0 {
-			sanitizedName, _, vErr := security.ValidateAttachment(header.Filename, fb, 5*1024*1024)
+			// Security verification specifically for chat image attachment (max 5MB)
+			sanitizedName, _, vErr := security.ValidateImageAttachment(header.Filename, fb, 5*1024*1024)
 			if vErr != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"success": false,
@@ -636,7 +638,14 @@ func (h *Handler) GetChatAttachment(c *gin.Context) {
 		return
 	}
 
-	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
+	c.Header("X-Content-Type-Options", "nosniff")
+	if !strings.HasPrefix(mime, "image/") || strings.Contains(mime, "svg") {
+		mime = "application/octet-stream"
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(fileName)))
+	} else {
+		c.Header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filepath.Base(fileName)))
+	}
 	c.Data(http.StatusOK, mime, data)
 }
 

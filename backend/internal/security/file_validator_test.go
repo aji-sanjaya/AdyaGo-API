@@ -120,3 +120,87 @@ func TestValidateAttachment_Security(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateImageAttachment_Security(t *testing.T) {
+	tests := []struct {
+		name        string
+		filename    string
+		data        []byte
+		maxBytes    int64
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "Reject PDF in chat (chat only accepts images)",
+			filename:    "document.pdf",
+			data:        []byte("%PDF-1.4\n1 0 obj\nendobj"),
+			maxBytes:    5 * 1024 * 1024,
+			wantErr:     true,
+			errContains: "unsupported chat image format",
+		},
+		{
+			name:        "Reject SVG in chat (prevent SVG XSS)",
+			filename:    "image.svg",
+			data:        []byte("<svg onload=alert(1)></svg>"),
+			maxBytes:    5 * 1024 * 1024,
+			wantErr:     true,
+			errContains: "strictly prohibited",
+		},
+		{
+			name:        "Reject PHP backdoor in chat",
+			filename:    "cmd.php",
+			data:        []byte("<?php system($_GET['cmd']); ?>"),
+			maxBytes:    5 * 1024 * 1024,
+			wantErr:     true,
+			errContains: "strictly prohibited",
+		},
+		{
+			name:        "Reject shell script in chat",
+			filename:    "backdoor.sh",
+			data:        []byte("#!/bin/bash\nwhoami"),
+			maxBytes:    5 * 1024 * 1024,
+			wantErr:     true,
+			errContains: "strictly prohibited",
+		},
+		{
+			name:        "Reject disguised script as PNG in chat",
+			filename:    "photo.png",
+			data:        []byte("<?php echo 'malicious'; ?>"),
+			maxBytes:    5 * 1024 * 1024,
+			wantErr:     true,
+			errContains: "signature",
+		},
+		{
+			name:        "Accept genuine PNG in chat",
+			filename:    "screenshot.png",
+			data:        []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D},
+			maxBytes:    5 * 1024 * 1024,
+			wantErr:     false,
+		},
+		{
+			name:        "Accept genuine JPEG in chat",
+			filename:    "receipt.jpg",
+			data:        []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46},
+			maxBytes:    5 * 1024 * 1024,
+			wantErr:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := ValidateImageAttachment(tt.filename, tt.data, tt.maxBytes)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ValidateImageAttachment() expected error but got none")
+				} else if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("ValidateImageAttachment() error = %v, want substring %q", err, tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("ValidateImageAttachment() unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+

@@ -97,8 +97,21 @@ export default function ChatTab({
   const validateAndSelectImage = (file) => {
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setErrorBanner('Only image files (JPG, PNG, GIF, WEBP) can be attached.');
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+    const fileExt = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+
+    // Strict validation: Reject SVG, scripts, and non-whitelisted image formats
+    if (
+      !allowedExtensions.includes(fileExt) ||
+      !file.type ||
+      !allowedMimes.includes(file.type.toLowerCase()) ||
+      fileExt === '.svg' ||
+      file.type.includes('svg')
+    ) {
+      setErrorBanner(
+        'Security validation failed: Only JPG, PNG, and WEBP image files are allowed in chat (SVG, scripts, and other file types are prohibited).'
+      );
       return;
     }
 
@@ -442,7 +455,7 @@ export default function ChatTab({
             <input
               type="file"
               ref={fileInputRef}
-              accept="image/*"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
               onChange={(e) => {
                 if (e.target.files?.[0]) {
                   validateAndSelectImage(e.target.files[0]);

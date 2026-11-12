@@ -104,6 +104,78 @@ func ValidateAttachment(filename string, data []byte, maxBytes int64) (sanitized
 	return cleanFullName, verifiedMime, nil
 }
 
+// Allowed image MIME types and extensions specifically for chat attachments
+var allowedImageExtensions = map[string]string{
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".png":  "image/png",
+	".webp": "image/webp",
+}
+
+// ValidateImageAttachment strictly validates image attachments specifically (e.g., for discussions/chat).
+// Only genuine raster images (JPG, PNG, WEBP) are accepted.
+// Documents (PDF) and vector graphics (SVG) are disallowed in chat to prevent Stored XSS and rendering errors.
+func ValidateImageAttachment(filename string, data []byte, maxBytes int64) (sanitizedName string, detectedMime string, err error) {
+	if len(data) == 0 {
+		return "", "", errors.New("image file is empty")
+	}
+
+	if maxBytes > 0 && int64(len(data)) > maxBytes {
+		return "", "", fmt.Errorf("image file size exceeds maximum allowed limit of %d MB", maxBytes/(1024*1024))
+	}
+
+	// 1. Sanitize filename & prevent path traversal
+	baseName := filepath.Base(filepath.Clean(filename))
+	baseName = strings.ReplaceAll(baseName, "\x00", "") // remove null bytes
+	if baseName == "" || baseName == "." || baseName == "/" {
+		return "", "", errors.New("invalid image file name")
+	}
+
+	ext := strings.ToLower(filepath.Ext(baseName))
+	if ext == "" {
+		return "", "", errors.New("image file must have a valid extension (.jpg, .jpeg, .png, .webp)")
+	}
+
+	// 2. Check dangerous extension blacklist
+	if dangerousExtensions[ext] {
+		return "", "", fmt.Errorf("security violation: file extension '%s' is strictly prohibited in chat", ext)
+	}
+
+	// Also check for double extensions (e.g., shell.php.jpg or evil.sh.png)
+	lowerName := strings.ToLower(baseName)
+	for dangExt := range dangerousExtensions {
+		if strings.Contains(lowerName, dangExt+".") {
+			return "", "", fmt.Errorf("security violation: double extension containing '%s' is prohibited in chat", dangExt)
+		}
+	}
+
+	// 3. Check allowed image extension whitelist (PDF is prohibited in chat)
+	expectedMime, allowed := allowedImageExtensions[ext]
+	if !allowed {
+		return "", "", fmt.Errorf("unsupported chat image format '%s'. Only JPG, JPEG, PNG, and WEBP image files are allowed", ext)
+	}
+
+	// 4. Inspect Magic Bytes / Signature Verification
+	matched, verifiedMime := verifyMagicBytes(ext, data)
+	if !matched || !strings.HasPrefix(verifiedMime, "image/") {
+		return "", "", fmt.Errorf("security validation failed: file content does not match the '%s' image signature (disguised or corrupted file)", ext)
+	}
+
+	// Clean filename characters
+	nameWithoutExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+	cleanedBase := safeFilenameRegex.ReplaceAllString(nameWithoutExt, "_")
+	if len(cleanedBase) > 80 {
+		cleanedBase = cleanedBase[:80]
+	}
+	cleanFullName := cleanedBase + ext
+
+	if verifiedMime == "" {
+		verifiedMime = expectedMime
+	}
+
+	return cleanFullName, verifiedMime, nil
+}
+
 // verifyMagicBytes inspects the binary header to verify genuine file signatures.
 func verifyMagicBytes(ext string, data []byte) (bool, string) {
 	if len(data) < 4 {
@@ -153,3 +225,4 @@ func verifyMagicBytes(ext string, data []byte) (bool, string) {
 
 	return false, ""
 }
+
