@@ -18,9 +18,14 @@ const LEGACY_FILTER_STORAGE_KEY = 'factoryhub_order_filters';
 
 const loadSavedFilters = () => {
   try {
-    const raw =
-      localStorage.getItem(FILTER_STORAGE_KEY) ||
-      localStorage.getItem(LEGACY_FILTER_STORAGE_KEY);
+    const legacy = localStorage.getItem(LEGACY_FILTER_STORAGE_KEY);
+    if (legacy) {
+      localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
+      if (!localStorage.getItem(FILTER_STORAGE_KEY)) {
+        localStorage.setItem(FILTER_STORAGE_KEY, legacy);
+      }
+    }
+    const raw = localStorage.getItem(FILTER_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
@@ -198,8 +203,10 @@ export default function CreatePoPage() {
             sortDir,
           })
         );
+        localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
       } else {
         localStorage.removeItem(FILTER_STORAGE_KEY);
+        localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
       }
     } catch (err) {
       console.error('Failed to save filter cache:', err);
@@ -215,9 +222,13 @@ export default function CreatePoPage() {
     setDateStart('');
     setDateEnd('');
     setSearch('');
+    setSortBy('dateordered');
+    setSortDir('desc');
+    setLimit(10);
     setPage(1);
     try {
       localStorage.removeItem(FILTER_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
     } catch (err) {
       console.error('Failed to clear filter cache:', err);
     }

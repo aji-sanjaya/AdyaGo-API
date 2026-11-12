@@ -19,9 +19,14 @@ const LEGACY_FILTER_STORAGE_KEY = 'factoryhub_requisition_filters';
 
 const loadSavedFilters = () => {
   try {
-    const raw =
-      localStorage.getItem(FILTER_STORAGE_KEY) ||
-      localStorage.getItem(LEGACY_FILTER_STORAGE_KEY);
+    const legacy = localStorage.getItem(LEGACY_FILTER_STORAGE_KEY);
+    if (legacy) {
+      localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
+      if (!localStorage.getItem(FILTER_STORAGE_KEY)) {
+        localStorage.setItem(FILTER_STORAGE_KEY, legacy);
+      }
+    }
+    const raw = localStorage.getItem(FILTER_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
@@ -99,7 +104,12 @@ export default function CreatePrPage() {
   const clientId = session?.clientId || session?.client_id || 0;
   const orgId = session?.orgId || session?.org_id || 0;
 
-  const activeFilterCount = (status ? 1 : 0) + (costCenterId ? 1 : 0) + (dateStart ? 1 : 0) + (dateEnd ? 1 : 0);
+  const activeFilterCount =
+    (status ? 1 : 0) +
+    (costCenterId ? 1 : 0) +
+    (dateStart ? 1 : 0) +
+    (dateEnd ? 1 : 0) +
+    (search.trim() ? 1 : 0);
 
   // Load Master Options once
   useEffect(() => {
@@ -189,8 +199,10 @@ export default function CreatePrPage() {
             sortDir,
           })
         );
+        localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
       } else {
         localStorage.removeItem(FILTER_STORAGE_KEY);
+        localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
       }
     } catch (err) {
       console.error('Failed to save filter cache:', err);
@@ -203,9 +215,13 @@ export default function CreatePrPage() {
     setDateStart('');
     setDateEnd('');
     setSearch('');
+    setSortBy('datedoc');
+    setSortDir('desc');
+    setLimit(10);
     setPage(1);
     try {
       localStorage.removeItem(FILTER_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
     } catch (err) {
       console.error('Failed to clear filter cache:', err);
     }
