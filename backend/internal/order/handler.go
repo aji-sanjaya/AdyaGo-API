@@ -227,6 +227,14 @@ func (h *Handler) GetRequisitionLines(c *gin.Context) {
 	if costCenterID == 0 {
 		costCenterID, _ = strconv.Atoi(c.Query("c_costcenter_id"))
 	}
+	orderID, _ := strconv.Atoi(c.Query("order_id"))
+	if orderID == 0 {
+		orderID, _ = strconv.Atoi(c.Query("c_order_id"))
+	}
+	prNumber := c.Query("pr_number")
+	if prNumber == "" {
+		prNumber = c.Query("documentno")
+	}
 	search := c.Query("search")
 	if search == "" {
 		search = c.Query("q")
@@ -234,9 +242,14 @@ func (h *Handler) GetRequisitionLines(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "15"))
 
-	lines, hasMore, err := h.service.GetRequisitionLines(clientID, costCenterID, search, page, limit)
+	lines, hasMore, err := h.service.GetRequisitionLines(clientID, costCenterID, orderID, prNumber, search, page, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusOK, gin.H{
+			"data":     []RequisitionLineOption{},
+			"has_more": false,
+			"page":     page,
+			"error":    err.Error(),
+		})
 		return
 	}
 

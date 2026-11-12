@@ -264,7 +264,11 @@ export default function OrderLineModal({
                 <button
                   type="button"
                   onClick={() => setReqModalOpen(true)}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-mono font-bold hover:bg-cyan-500/30 transition-all"
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all ${
+                    isDark
+                      ? 'border-slate-800 bg-slate-950/40 text-slate-400 hover:text-white hover:bg-slate-800'
+                      : 'border-slate-200 bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                  }`}
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>{reqDocNo ? `PR #${reqDocNo}` : 'From Requisition'}</span>
@@ -295,8 +299,11 @@ export default function OrderLineModal({
                   ))}
                 </select>
                 {reqDocNo && (
-                  <span className="text-[10px] font-mono text-cyan-400 block mt-1">
-                    Linked to Requisition: <strong>{reqDocNo}</strong>
+                  <span className="text-xs font-mono text-orange-600 dark:text-orange-400 flex items-center gap-1.5 mt-1.5">
+                    <FileText className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>
+                      Linked to Requisition: <strong>{reqDocNo}</strong>
+                    </span>
                   </span>
                 )}
               </div>

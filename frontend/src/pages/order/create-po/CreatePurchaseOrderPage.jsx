@@ -51,7 +51,7 @@ import CustomDatePicker from '../../../components/ui/CustomDatePicker';
 import { decryptDocumentId, encryptDocumentId } from '../../../utils/crypto';
 import ReauthModal from '../../../components/common/ReauthModal';
 import ConfirmDeleteModal from '../../../components/common/ConfirmDeleteModal';
-import OrderLineModal from './components/OrderLineModal';
+import OrderLineForm from './components/OrderLineForm';
 import LinkedRequisitionsTab from './components/LinkedRequisitionsTab';
 import LinkedReceiptsTab from './components/LinkedReceiptsTab';
 import OrderChatTab from './components/OrderChatTab';
@@ -177,7 +177,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
   const [tabLoading, setTabLoading] = useState(false);
 
   // Line modal & line management
-  const [showLineModal, setShowLineModal] = useState(false);
+  const [showLineForm, setShowLineForm] = useState(false);
   const [selectedLineForEdit, setSelectedLineForEdit] = useState(null);
   const [deletingLineId, setDeletingLineId] = useState(null);
   const [linePendingDelete, setLinePendingDelete] = useState(null);
@@ -633,9 +633,26 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
     }
   };
 
+  // Refresh lines with loading effect
+  const refreshOrderLines = async () => {
+    if (!targetId) return;
+    setLoadingLines(true);
+    try {
+      const res = await orderApi.getOrder(targetId);
+      if (res && res.data) {
+        applyRecordData(res.data.header, res.data.lines, false);
+      }
+    } catch (err) {
+      console.error('Failed to reload lines:', err);
+    } finally {
+      setTimeout(() => setLoadingLines(false), 250);
+    }
+  };
+
   // Line saved callback
   const handleLineSaved = async (mode) => {
     if (!targetId) return;
+    setLoadingLines(true);
     try {
       const res = await orderApi.getOrder(targetId);
       if (res && res.data) {
@@ -651,6 +668,8 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
       console.error('Failed to reload lines:', err);
+    } finally {
+      setTimeout(() => setLoadingLines(false), 250);
     }
   };
 
@@ -918,6 +937,10 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
   // Tab change handler
   const handleTabChange = async (newTab) => {
     if (newTab === activeTab) return;
+    if (newTab !== 'lines') {
+      setShowLineForm(false);
+      setSelectedLineForEdit(null);
+    }
     setActiveTab(newTab);
 
     if (!isNew && targetId) {
@@ -1018,6 +1041,51 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       setLineSortField(field);
       setLineSortDir('asc');
     }
+  };
+
+  const renderLineSortHeader = (label, field, align = 'left', customWidth = '') => {
+    const isActive = lineSortField === field;
+    return (
+      <th
+        onClick={() => handleLineSort(field)}
+        className={`px-5 py-3.5 font-semibold cursor-pointer select-none transition-colors group ${customWidth} ${
+          align === 'center'
+            ? 'text-center'
+            : align === 'right'
+            ? 'text-right'
+            : 'text-left'
+        } ${
+          isActive
+            ? isDark
+              ? 'text-cyan-400 bg-cyan-950/20'
+              : 'text-indigo-600 bg-indigo-50/50'
+            : isDark
+            ? 'hover:text-slate-200'
+            : 'hover:text-slate-800'
+        }`}
+      >
+        <div
+          className={`flex items-center gap-1.5 w-full ${
+            align === 'center'
+              ? 'justify-center text-center'
+              : align === 'right'
+              ? 'justify-end text-right'
+              : 'justify-start text-left'
+          }`}
+        >
+          <span>{label}</span>
+          {isActive ? (
+            lineSortDir === 'asc' ? (
+              <ArrowUp className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+            ) : (
+              <ArrowDown className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+            )
+          ) : (
+            <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-30 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+          )}
+        </div>
+      </th>
+    );
   };
 
   const selectedOrg = orgOptions.find((o) => o.value === Number(orgId)) || null;
@@ -1200,7 +1268,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
             {/* Tabs Header */}
             <div
               className={`border-b px-4 sm:px-8 ${
-                isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-slate-50/70'
+                isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-white'
               }`}
             >
               <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto" aria-label="Tabs">
@@ -1972,73 +2040,105 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
             {/* TAB CONTENT: LINES */}
             {!tabLoading && activeTab === 'lines' && (
               <div className="p-6 sm:p-8 space-y-5 w-full">
-                {/* Lines Action Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center flex-shrink-0">
-                      <List className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3
-                        className={`text-sm sm:text-base font-bold tracking-tight font-mono ${
-                          isDark ? 'text-white' : 'text-slate-900'
-                        }`}
-                      >
-                        Order Line Items ({totalLineCount})
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
-                    {/* Line Search */}
-                    <div className="relative w-full sm:w-64">
-                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        value={lineSearch}
-                        onChange={(e) => {
-                          setLineSearch(e.target.value);
-                          setLinePage(1);
-                        }}
-                        placeholder="Search lines..."
-                        className={`w-full pl-9 pr-7 py-2 rounded-xl text-xs font-mono border outline-none transition ${
-                          isDark
-                            ? 'bg-slate-950/70 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/60'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500'
-                        }`}
-                      />
-                      {lineSearch && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLineSearch('');
-                            setLinePage(1);
-                          }}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-xs font-bold"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-
-                    {!isReadOnly && !isNew && (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedLineForEdit(null);
-                            setShowLineModal(true);
-                          }}
-                          title="Add Line Item"
-                          aria-label="Add Line Item"
-                          className="p-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white shadow-md shadow-indigo-500/20 transition cursor-pointer flex items-center justify-center flex-shrink-0"
-                        >
-                          <Plus className="w-4 h-4 flex-shrink-0" />
-                        </button>
+                {showLineForm ? (
+                  <OrderLineForm
+                    isEdit={Boolean(selectedLineForEdit)}
+                    lineData={selectedLineForEdit}
+                    orderId={targetId}
+                    clientId={clientId}
+                    costCenterId={costCenterId}
+                    costCenters={options?.costCenters || []}
+                    headerTaxId={taxId}
+                    taxes={options?.taxes || []}
+                    session={session}
+                    isDark={isDark}
+                    onCancel={() => {
+                      setShowLineForm(false);
+                      setSelectedLineForEdit(null);
+                      refreshOrderLines();
+                    }}
+                    onSuccess={(mode) => {
+                      setShowLineForm(false);
+                      setSelectedLineForEdit(null);
+                      handleLineSaved(mode);
+                    }}
+                    onIntermediateSaved={(mode) => {
+                      handleLineSaved(mode);
+                    }}
+                    onTokenExpired={() => {
+                      setShowLineForm(false);
+                      setShowReauthModal(true);
+                    }}
+                  />
+                ) : (
+                  <>
+                    {/* Lines Action Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center flex-shrink-0">
+                          <List className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3
+                            className={`text-sm sm:text-base font-bold tracking-tight font-mono ${
+                              isDark ? 'text-white' : 'text-slate-900'
+                            }`}
+                          >
+                            Order Line Items ({totalLineCount})
+                          </h3>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </div>
+
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+                        {/* Line Search */}
+                        <div className="relative w-full sm:w-64">
+                          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={lineSearch}
+                            onChange={(e) => {
+                              setLineSearch(e.target.value);
+                              setLinePage(1);
+                            }}
+                            placeholder="Search lines..."
+                            className={`w-full h-[38px] pl-9 pr-7 rounded-xl text-xs font-mono border outline-none transition ${
+                              isDark
+                                ? 'bg-slate-950/70 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/60'
+                                : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500'
+                            }`}
+                          />
+                          {lineSearch && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLineSearch('');
+                                setLinePage(1);
+                              }}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-xs font-bold"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+
+                        {!isReadOnly && !isNew && (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedLineForEdit(null);
+                                setShowLineForm(true);
+                              }}
+                              title="Add Line Item"
+                              aria-label="Add Line Item"
+                              className="h-[38px] w-[38px] rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white shadow-md shadow-indigo-500/20 transition cursor-pointer flex items-center justify-center flex-shrink-0"
+                            >
+                              <Plus className="w-4 h-4 flex-shrink-0" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
                 {/* Lines Table Container */}
                 <div
@@ -2047,8 +2147,13 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                   }`}
                 >
                   {/* Mobile Lines Card View (Visible only on < md screens) */}
-                  <div className="block md:hidden divide-y divide-slate-800/40">
-                    {paginatedLines.length === 0 ? (
+                  <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800/40">
+                    {loadingLines ? (
+                      <div className="p-8 text-center font-mono text-slate-400 space-y-2">
+                        <Loader2 className="w-8 h-8 mx-auto animate-spin text-cyan-400" />
+                        <p className="text-xs">Loading order line items...</p>
+                      </div>
+                    ) : paginatedLines.length === 0 ? (
                       <div className="p-8 text-center font-mono text-slate-400 space-y-2">
                         <Package className="w-8 h-8 mx-auto opacity-30 text-slate-400" />
                         <p className="text-xs">
@@ -2082,7 +2187,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                                   type="button"
                                   onClick={() => {
                                     setSelectedLineForEdit(line);
-                                    setShowLineModal(true);
+                                    setShowLineForm(true);
                                   }}
                                   className={`p-1.5 rounded-lg border transition cursor-pointer ${
                                     isDark
@@ -2111,7 +2216,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                               onClick={() => {
                                 if (!isReadOnly) {
                                   setSelectedLineForEdit(line);
-                                  setShowLineModal(true);
+                                  setShowLineForm(true);
                                 }
                               }}
                               className={`text-xs sm:text-sm font-mono font-bold leading-tight ${
@@ -2137,7 +2242,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                             {/* Qty & UoM */}
                             <div
                               className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
-                                isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                               }`}
                             >
                               <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -2152,7 +2257,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                             {/* Unit Price */}
                             <div
                               className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
-                                isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                               }`}
                             >
                               <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -2166,7 +2271,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                             {/* Line Total */}
                             <div
                               className={`col-span-2 sm:col-span-1 p-2.5 rounded-xl border flex flex-col gap-0.5 ${
-                                isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                               }`}
                             >
                               <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -2184,96 +2289,76 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
 
                   {/* Desktop / Tablet Table View (Visible only on md+ screens) */}
                   <div className="hidden md:block overflow-x-auto w-full max-w-full touch-pan-x">
-                    <table className="w-full text-left text-xs min-w-[700px] border-collapse font-mono">
+                    <table className="w-full text-left text-xs min-w-[700px]">
                       <thead>
                         <tr
-                          className={`border-b text-[10px] font-mono uppercase tracking-wider ${
-                            isDark ? 'border-slate-800 text-slate-400 bg-slate-950/40' : 'border-slate-200 text-slate-500 bg-slate-50/70'
+                          className={`border-b text-[10px] font-mono uppercase tracking-wider font-semibold ${
+                            isDark
+                              ? 'border-slate-800 text-slate-400 bg-slate-950/40'
+                              : 'border-slate-200 text-slate-500 bg-slate-50/70'
                           }`}
                         >
-                          {!isReadOnly && <th className="px-3 py-3.5 font-semibold text-center w-16">Action</th>}
-                          <th
-                            onClick={() => handleLineSort('line')}
-                            className="px-3 py-3.5 font-semibold cursor-pointer select-none text-center w-12"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              <span>#</span>
-                              {lineSortField === 'line' && (
-                                lineSortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-cyan-400" /> : <ArrowDown className="w-3 h-3 text-cyan-400" />
-                              )}
-                            </div>
-                          </th>
-                          <th
-                            onClick={() => handleLineSort('product_name')}
-                            className="px-4 py-3.5 font-semibold cursor-pointer select-none"
-                          >
-                            <div className="flex items-center gap-1">
-                              <span>Item / Description</span>
-                              {lineSortField === 'product_name' && (
-                                lineSortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-cyan-400" /> : <ArrowDown className="w-3 h-3 text-cyan-400" />
-                              )}
-                            </div>
-                          </th>
-                          <th
-                            onClick={() => handleLineSort('qtyentered')}
-                            className="px-3 py-3.5 font-semibold text-right cursor-pointer select-none w-20"
-                          >
-                            <div className="flex items-center justify-end gap-1">
-                              <span>Qty</span>
-                              {lineSortField === 'qtyentered' && (
-                                lineSortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-cyan-400" /> : <ArrowDown className="w-3 h-3 text-cyan-400" />
-                              )}
-                            </div>
-                          </th>
-                          <th className="px-3 py-3.5 font-semibold text-center w-16">UoM</th>
-                          <th
-                            onClick={() => handleLineSort('priceactual')}
-                            className="px-3 py-3.5 font-semibold text-right cursor-pointer select-none w-28"
-                          >
-                            <div className="flex items-center justify-end gap-1">
-                              <span>Unit Price</span>
-                              {lineSortField === 'priceactual' && (
-                                lineSortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-cyan-400" /> : <ArrowDown className="w-3 h-3 text-cyan-400" />
-                              )}
-                            </div>
-                          </th>
-                          <th className="px-3 py-3.5 font-semibold text-center w-16">Disc</th>
-                          <th className="px-3 py-3.5 font-semibold text-center w-20">PPh23</th>
-                          <th
-                            onClick={() => handleLineSort('linenetamt')}
-                            className="px-4 py-3.5 font-semibold text-right cursor-pointer select-none w-32"
-                          >
-                            <div className="flex items-center justify-end gap-1">
-                              <span>Total</span>
-                              {lineSortField === 'linenetamt' && (
-                                lineSortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-cyan-400" /> : <ArrowDown className="w-3 h-3 text-cyan-400" />
-                              )}
-                            </div>
-                          </th>
+                          {!isReadOnly && (
+                            <th className="px-5 py-3.5 font-semibold text-center w-16">
+                              Action
+                            </th>
+                          )}
+                          {renderLineSortHeader('Line', 'line', 'center', 'w-16')}
+                          {renderLineSortHeader('Product / Description', 'product_name')}
+                          {renderLineSortHeader('Qty', 'qtyentered', 'right', 'w-24')}
+                          <th className="px-5 py-3.5 font-semibold text-center w-16">UOM</th>
+                          {renderLineSortHeader('Unit Price', 'priceactual', 'right', 'w-32')}
+                          {renderLineSortHeader('Disc', 'discount', 'center', 'w-16')}
+                          <th className="px-5 py-3.5 font-semibold text-center w-20">PPh 23</th>
+                          {renderLineSortHeader('Total', 'linenetamt', 'right', 'w-36')}
                         </tr>
                       </thead>
                       <tbody className={`divide-y ${isDark ? 'divide-slate-800/60' : 'divide-slate-100'}`}>
-                        {paginatedLines.length > 0 ? (
+                        {loadingLines ? (
+                          <tr>
+                            <td
+                              colSpan={isReadOnly ? 8 : 9}
+                              className="py-16 text-center font-mono text-slate-400"
+                            >
+                              <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-cyan-400" />
+                              Loading order line items...
+                            </td>
+                          </tr>
+                        ) : paginatedLines.length > 0 ? (
                           paginatedLines.map((line, idx) => (
                             <tr
                               key={line.id || idx}
+                              onClick={() => {
+                                if (!isReadOnly) {
+                                  setSelectedLineForEdit(line);
+                                  setShowLineForm(true);
+                                }
+                              }}
+                              title={!isReadOnly ? 'Click to edit line' : undefined}
                               className={`transition-colors ${
-                                isDark ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-50 text-slate-700'
+                                !isReadOnly ? 'cursor-pointer' : ''
+                              } ${
+                                isDark
+                                  ? 'hover:bg-slate-800/60'
+                                  : 'hover:bg-[rgb(238_242_255_/_0.7)]'
                               }`}
                             >
                               {!isReadOnly && (
-                                <td className="px-3 py-2 text-center whitespace-nowrap">
+                                <td
+                                  className="px-5 py-2 text-center whitespace-nowrap"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <div className="flex items-center justify-center gap-1">
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setSelectedLineForEdit(line);
-                                        setShowLineModal(true);
+                                        setShowLineForm(true);
                                       }}
                                       className={`p-1.5 rounded-lg border transition cursor-pointer ${
                                         isDark
                                           ? 'bg-slate-800 hover:bg-slate-700 text-cyan-400 border-slate-700'
-                                          : 'bg-white hover:bg-slate-100 text-indigo-600 border-slate-200'
+                                          : 'bg-white hover:bg-slate-100 text-indigo-600 border-slate-200 shadow-xs'
                                       }`}
                                       title="Edit Line"
                                     >
@@ -2290,42 +2375,70 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                                   </div>
                                 </td>
                               )}
-                              <td className="px-3 py-2 text-center text-slate-400">
+                              <td
+                                className={`px-5 py-2 font-mono text-[10px] text-center ${
+                                  isDark ? 'text-slate-400' : 'text-slate-500'
+                                }`}
+                              >
                                 {line.line || idx + 1}
                               </td>
-                              <td className="px-4 py-2">
-                                <div className="font-bold text-slate-900 dark:text-slate-100">
-                                  {line.product_name || line.charge_name || 'Item'}
+                              <td
+                                className={`px-5 py-2 font-mono text-[10px] ${
+                                  isDark ? 'text-slate-400' : 'text-slate-500'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span>{line.product_name || line.charge_name || 'Item'}</span>
+                                  {line.m_requisitionline_id ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-1.5 py-0.5 rounded font-mono font-bold flex-shrink-0">
+                                      PR #{line.requisition_documentno || line.m_requisitionline_id}
+                                    </span>
+                                  ) : null}
                                 </div>
                                 {line.product_value && (
-                                  <span className="text-[11px] text-slate-400 block font-mono">
+                                  <span className="text-[10px] text-slate-400 block font-mono">
                                     {line.product_value}
                                   </span>
                                 )}
                                 {line.description && (
-                                  <div className="text-[11px] text-slate-500 italic mt-0.5">
+                                  <div className="text-[10px] text-slate-500 italic mt-0.5">
                                     {line.description}
                                   </div>
                                 )}
-                                {line.m_requisitionline_id ? (
-                                  <span className="inline-flex items-center gap-1 mt-1 text-[10px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded font-mono">
-                                    Linked PR #{line.m_requisitionline_id}
-                                  </span>
-                                ) : null}
                               </td>
-                              <td className="px-3 py-2 text-right font-medium">
-                                {line.qtyentered || line.qtyordered || 0}
+                              <td
+                                className={`px-5 py-2 text-right font-mono text-[10px] ${
+                                  isDark ? 'text-slate-400' : 'text-slate-500'
+                                }`}
+                              >
+                                {Number(line.qtyentered || line.qtyordered || 0).toLocaleString('en-US')}
                               </td>
-                              <td className="px-3 py-2 text-center text-slate-400">
+                              <td
+                                className={`px-5 py-2 font-mono text-[10px] text-center ${
+                                  isDark ? 'text-slate-400' : 'text-slate-500'
+                                }`}
+                              >
                                 {line.uom_symbol || line.uom_name || '-'}
                               </td>
-                              <td className="px-3 py-2 text-right">
+                              <td
+                                className={`px-5 py-2 text-right font-mono text-[10px] ${
+                                  isDark ? 'text-slate-400' : 'text-slate-500'
+                                }`}
+                              >
                                 {formatCurrency(line.priceactual || line.priceentered)}
                               </td>
-                              <td className="px-3 py-2 text-center text-slate-400">
+                              <td
+                                className={`px-5 py-2 font-mono text-[10px] text-center ${
+                                  isDark ? 'text-slate-400' : 'text-slate-500'
+                                }`}
+                              >
                                 {line.discount ? `${line.discount}%` : '-'}
                               </td>
-                              <td className="px-3 py-2 text-center">
+                              <td
+                                className={`px-5 py-2 font-mono text-[10px] text-center ${
+                                  isDark ? 'text-slate-400' : 'text-slate-500'
+                                }`}
+                              >
                                 {line.adw_iswithholding === 'Y' ? (
                                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
                                     {line.adw_withholdingrate || 2}%
@@ -2334,7 +2447,11 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                                   <span className="text-slate-500">-</span>
                                 )}
                               </td>
-                              <td className="px-4 py-2 text-right font-bold text-slate-900 dark:text-slate-100">
+                              <td
+                                className={`px-5 py-2 text-right font-mono text-[10px] ${
+                                  isDark ? 'text-slate-400' : 'text-slate-500'
+                                }`}
+                              >
                                 {formatCurrency(line.linenetamt)}
                               </td>
                             </tr>
@@ -2354,7 +2471,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                   {/* Lines Pagination */}
                   <div
                     className={`px-4 py-3 border-t flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs ${
-                      isDark ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50/70 text-slate-600'
+                      isDark ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-white text-slate-600'
                     }`}
                   >
                     <div>
@@ -2415,6 +2532,8 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                     </div>
                   </div>
                 </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -2447,7 +2566,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                   className={`flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl border ${
                     isDark
                       ? 'bg-slate-950/40 border-slate-800'
-                      : 'bg-slate-50/80 border-slate-200 shadow-xs'
+                      : 'bg-white border-slate-200 shadow-xs'
                   }`}
                 >
                   <div>
@@ -2510,7 +2629,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                       className={`col-span-full py-12 text-center font-mono border rounded-xl ${
                         isDark
                           ? 'border-slate-800 text-slate-500 bg-slate-900/30'
-                          : 'border-slate-200 text-slate-500 bg-slate-50/50'
+                          : 'border-slate-200 text-slate-500 bg-white'
                       }`}
                     >
                       <Paperclip className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -2669,27 +2788,6 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
             )}
           </div>
         </div>
-      )}
-
-      {/* Line Modal */}
-      {showLineModal && (
-        <OrderLineModal
-          isOpen={showLineModal}
-          onClose={() => {
-            setShowLineModal(false);
-            setSelectedLineForEdit(null);
-          }}
-          orderId={targetId}
-          line={selectedLineForEdit}
-          options={options}
-          session={session}
-          isDark={isDark}
-          onSaved={handleLineSaved}
-          onTokenExpired={() => {
-            setShowLineModal(false);
-            setShowReauthModal(true);
-          }}
-        />
       )}
 
       {/* Delete Line Modal */}

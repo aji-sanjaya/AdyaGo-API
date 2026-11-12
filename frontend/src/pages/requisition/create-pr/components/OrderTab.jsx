@@ -203,13 +203,17 @@ export default function OrderTab({ targetId, isDark, onTotalOrdersChange }) {
       ) : filteredOrders.length === 0 ? (
         <div
           className={`py-14 sm:py-20 rounded-2xl border text-center p-6 flex flex-col items-center justify-center transition ${
-            isDark ? 'bg-slate-950/40 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+            isDark ? 'bg-slate-950/40 border-slate-800/80' : 'bg-white border-slate-200'
           }`}
         >
           <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mb-3">
             <ShoppingBag className="w-6 h-6" />
           </div>
-          <h4 className="text-sm font-bold text-slate-200 mb-1">
+          <h4
+            className={`text-sm font-bold mb-1 ${
+              isDark ? 'text-slate-200' : 'text-slate-900'
+            }`}
+          >
             {searchQuery ? 'No Matching Purchase Orders' : 'No Purchase Orders Linked Yet'}
           </h4>
           <p className="text-xs text-slate-400 max-w-md">
@@ -252,7 +256,13 @@ export default function OrderTab({ targetId, isDark, onTotalOrdersChange }) {
                           {order.documentno}
                         </span>
                         {getStatusBadge(order.docstatus, order.status_label)}
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-mono border ${
+                            isDark
+                              ? 'bg-slate-800 text-slate-300 border-slate-700'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
                           {order.lines?.length || 0} {order.lines?.length === 1 ? 'Line Item' : 'Line Items'}
                         </span>
                       </div>
@@ -261,7 +271,7 @@ export default function OrderTab({ targetId, isDark, onTotalOrdersChange }) {
                         {/* Business Partner */}
                         <div className="flex items-center gap-1.5">
                           <Building2 className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                          <span className="font-semibold text-slate-300">
+                          <span className={`font-semibold ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>
                             {order.bpartner_name || '-'}
                           </span>
                         </div>
@@ -302,7 +312,7 @@ export default function OrderTab({ targetId, isDark, onTotalOrdersChange }) {
                 {isExpanded && (
                   <div
                     className={`border-t ${
-                      isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-100 bg-slate-50/50'
+                      isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-100 bg-white'
                     }`}
                   >
                     {order.description && (
@@ -359,7 +369,7 @@ export default function OrderTab({ targetId, isDark, onTotalOrdersChange }) {
                               {/* Qty Ordered */}
                               <div
                                 className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
-                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                                 }`}
                               >
                                 <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -379,7 +389,7 @@ export default function OrderTab({ targetId, isDark, onTotalOrdersChange }) {
                               {/* Qty Delivered */}
                               <div
                                 className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
-                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                                 }`}
                               >
                                 <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">

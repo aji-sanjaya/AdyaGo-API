@@ -286,7 +286,7 @@ export default function LinkedRequisitionsTab({ orderId, isDark, onTotalCountCha
                               {/* PR Quantity */}
                               <div
                                 className={`p-2 rounded-xl border flex flex-col gap-0.5 ${
-                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                                 }`}
                               >
                                 <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -301,7 +301,7 @@ export default function LinkedRequisitionsTab({ orderId, isDark, onTotalCountCha
                               {/* Price */}
                               <div
                                 className={`p-2 rounded-xl border flex flex-col gap-0.5 ${
-                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                                 }`}
                               >
                                 <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -315,7 +315,7 @@ export default function LinkedRequisitionsTab({ orderId, isDark, onTotalCountCha
                               {/* Net Amount */}
                               <div
                                 className={`col-span-2 sm:col-span-1 p-2 rounded-xl border flex flex-col gap-0.5 ${
-                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                                 }`}
                               >
                                 <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">

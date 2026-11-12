@@ -175,7 +175,7 @@ export default function LinkedReceiptsTab({ orderId, isDark, onTotalCountChange 
                   {/* Movement Date */}
                   <div
                     className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
-                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                     }`}
                   >
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1 font-semibold">
@@ -190,7 +190,7 @@ export default function LinkedReceiptsTab({ orderId, isDark, onTotalCountChange 
                   {/* Warehouse */}
                   <div
                     className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
-                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                     }`}
                   >
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1 font-semibold">
@@ -205,7 +205,7 @@ export default function LinkedReceiptsTab({ orderId, isDark, onTotalCountChange 
                   {/* SPP No */}
                   <div
                     className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
-                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                     }`}
                   >
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -219,7 +219,7 @@ export default function LinkedReceiptsTab({ orderId, isDark, onTotalCountChange 
                   {/* DO Reference */}
                   <div
                     className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
-                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-white border-slate-200'
                     }`}
                   >
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">

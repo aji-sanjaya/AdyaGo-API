@@ -1448,7 +1448,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
               className={`border-b px-4 sm:px-8 ${
                 isDark
                   ? 'border-slate-800 bg-slate-950/40'
-                  : 'border-slate-200 bg-slate-50/70'
+                  : 'border-slate-200 bg-white'
               }`}
             >
               <nav className="-mb-px flex space-x-4 sm:space-x-8" aria-label="Tabs">
@@ -2003,7 +2003,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                           setLinePage(1);
                         }}
                         placeholder="Search lines..."
-                        className={`w-full pl-9 pr-7 py-2 rounded-xl text-xs font-mono border outline-none transition ${
+                        className={`w-full h-[38px] pl-9 pr-7 rounded-xl text-xs font-mono border outline-none transition ${
                           isDark
                             ? 'bg-slate-950/70 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/60'
                             : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500'
@@ -2034,7 +2034,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                           }}
                           title="Add Line Item"
                           aria-label="Add Line Item"
-                          className="p-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white shadow-md shadow-indigo-500/20 transition cursor-pointer flex items-center justify-center flex-shrink-0"
+                          className="h-[38px] w-[38px] rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white shadow-md shadow-indigo-500/20 transition cursor-pointer flex items-center justify-center flex-shrink-0"
                         >
                           <Plus className="w-4 h-4 flex-shrink-0" />
                         </button>
@@ -2045,7 +2045,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                           onClick={() => setShowUploadLinesModal(true)}
                           title="Upload Lines (Excel / CSV)"
                           aria-label="Upload Lines"
-                          className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-center flex-shrink-0 shadow-sm ${
+                          className={`h-[38px] w-[38px] rounded-xl border transition cursor-pointer flex items-center justify-center flex-shrink-0 shadow-sm ${
                             isDark
                               ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-cyan-400 hover:bg-slate-800'
                               : 'bg-white border-slate-200 text-slate-700 hover:text-indigo-600 hover:bg-slate-50'
@@ -2214,7 +2214,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                                 className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
                                   isDark
                                     ? 'bg-slate-950/50 border-slate-800/80'
-                                    : 'bg-slate-50 border-slate-200'
+                                    : 'bg-white border-slate-200'
                                 }`}
                               >
                                 <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -2240,7 +2240,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                                 className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
                                   isDark
                                     ? 'bg-slate-950/50 border-slate-800/80'
-                                    : 'bg-slate-50 border-slate-200'
+                                    : 'bg-white border-slate-200'
                                 }`}
                               >
                                 <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -2264,7 +2264,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                                 className={`col-span-2 sm:col-span-1 p-2.5 rounded-xl border flex flex-col gap-0.5 ${
                                   isDark
                                     ? 'bg-slate-950/50 border-slate-800/80'
-                                    : 'bg-slate-50 border-slate-200'
+                                    : 'bg-white border-slate-200'
                                 }`}
                               >
                                 <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
@@ -2671,7 +2671,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                   className={`flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl border ${
                     isDark
                       ? 'bg-slate-950/40 border-slate-800'
-                      : 'bg-slate-50/80 border-slate-200 shadow-xs'
+                      : 'bg-white border-slate-200 shadow-xs'
                   }`}
                 >
                   <div>
@@ -2734,7 +2734,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                       className={`col-span-full py-12 text-center font-mono border rounded-xl ${
                         isDark
                           ? 'border-slate-800 text-slate-500 bg-slate-900/30'
-                          : 'border-slate-200 text-slate-500 bg-slate-50/50'
+                          : 'border-slate-200 text-slate-500 bg-white'
                       }`}
                     >
                       <Paperclip className="w-8 h-8 mx-auto mb-2 opacity-30" />

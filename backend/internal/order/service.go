@@ -549,7 +549,7 @@ func (s *Service) GetCharges(clientID int, search string, page, limit int) ([]Ch
 }
 
 // 7. Get Requisition Lines available for PO
-func (s *Service) GetRequisitionLines(clientID, costCenterID int, search string, page, limit int) ([]RequisitionLineOption, bool, error) {
+func (s *Service) GetRequisitionLines(clientID, costCenterID, orderID int, prNumber, search string, page, limit int) ([]RequisitionLineOption, bool, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -558,10 +558,28 @@ func (s *Service) GetRequisitionLines(clientID, costCenterID int, search string,
 	}
 	offset := (page - 1) * limit
 
+	// Resolve tenant (clientID) from c_order header if not provided
+	if clientID <= 0 && orderID > 0 {
+		_ = s.db.DB.Raw("SELECT COALESCE(ad_client_id, 0) FROM c_order WHERE c_order_id = ?", orderID).Scan(&clientID)
+	}
+	if clientID <= 0 {
+		clientID = 1000000
+	}
+
+	// If costCenterID not directly provided, resolve it from c_order header if orderID is known
+	if costCenterID <= 0 && orderID > 0 {
+		_ = s.db.DB.Raw("SELECT COALESCE(c_costcenter_id, 0) FROM c_order WHERE c_order_id = ?", orderID).Scan(&costCenterID)
+	}
+
+	// Strictly require Cost Center filter: must match c_order / header order
+	if costCenterID <= 0 {
+		return []RequisitionLineOption{}, false, fmt.Errorf("cost center is required. Please set a Cost Center on the order header first")
+	}
+
 	query := `
 		SELECT 
 			rl.m_requisitionline_id AS id,
-			r.documentno || ' - ' || p.value || ' - ' || p.name || ' (Qty: ' || rl.qty || ' ' || COALESCE(uom.uomsymbol, uom.name, '') || ')' AS text,
+			r.documentno || ' - ' || p.value || ' - ' || p.name || ' (Avail: ' || (rl.qty - COALESCE(used.ordered_qty, 0)) || ' ' || COALESCE(uom.uomsymbol, uom.name, '') || ')' AS text,
 			r.documentno AS po_number,
 			p.name AS product_name,
 			p.value AS product_value,
@@ -570,7 +588,7 @@ func (s *Service) GetRequisitionLines(clientID, costCenterID int, search string,
 			COALESCE(uom.name, '') AS uom_name,
 			COALESCE(uom.uomsymbol, '') AS uom_symbol,
 			rl.qty,
-			rl.qty AS remaining_qty,
+			(rl.qty - COALESCE(used.ordered_qty, 0)) AS remaining_qty,
 			COALESCE(r.c_costcenter_id, 0) AS c_costcenter_id,
 			COALESCE(rl.priceactual, 0) AS price,
 			COALESCE(rl.description, '') AS description
@@ -578,15 +596,27 @@ func (s *Service) GetRequisitionLines(clientID, costCenterID int, search string,
 		JOIN m_requisition r ON r.m_requisition_id = rl.m_requisition_id
 		JOIN m_product p ON p.m_product_id = rl.m_product_id
 		LEFT JOIN c_uom uom ON uom.c_uom_id = rl.c_uom_id
+		LEFT JOIN (
+			SELECT col.m_requisitionline_id, SUM(col.qtyentered) AS ordered_qty
+			FROM c_orderline col
+			JOIN c_order co ON co.c_order_id = col.c_order_id
+			WHERE col.m_requisitionline_id IS NOT NULL
+			  AND co.docstatus NOT IN ('VO', 'RE')
+			GROUP BY col.m_requisitionline_id
+		) used ON used.m_requisitionline_id = rl.m_requisitionline_id
 		WHERE r.docstatus = 'CO'
 		  AND rl.isactive = 'Y'
+		  AND r.isactive = 'Y'
+		  AND r.ad_client_id = ?
 		  AND rl.ad_client_id = ?
+		  AND r.c_costcenter_id = ?
+		  AND (rl.qty - COALESCE(used.ordered_qty, 0)) > 0
 	`
-	args := []interface{}{clientID}
+	args := []interface{}{clientID, clientID, costCenterID}
 
-	if costCenterID > 0 {
-		query += " AND r.c_costcenter_id = ?"
-		args = append(args, costCenterID)
+	if strings.TrimSpace(prNumber) != "" {
+		query += " AND r.documentno ILIKE ?"
+		args = append(args, "%"+strings.TrimSpace(prNumber)+"%")
 	}
 
 	if strings.TrimSpace(search) != "" {
@@ -973,13 +1003,24 @@ func (s *Service) DeleteOrder(orderID int, token string) error {
 
 // 14. Create Order Line via iDempiere REST API
 func (s *Service) CreateOrderLine(orderID int, req *CreateOrderLineRequest, clientID int, token string) (int, error) {
+	// Resolve Client ID and Org ID from the parent order header
+	var orderClientID, orderOrgID int
+	if err := s.db.DB.Raw("SELECT COALESCE(ad_client_id, 0), COALESCE(ad_org_id, 0) FROM c_order WHERE c_order_id = ?", orderID).Row().Scan(&orderClientID, &orderOrgID); err == nil {
+		if clientID <= 0 && orderClientID > 0 {
+			clientID = orderClientID
+		}
+	}
+	if clientID <= 0 {
+		clientID = 1000000
+	}
+
 	// Requisition limit check
 	if req.RequisitionLineID != nil && *req.RequisitionLineID > 0 {
 		var reqQty float64
 		_ = s.db.DB.Raw("SELECT qty FROM m_requisitionline WHERE m_requisitionline_id = ?", *req.RequisitionLineID).Scan(&reqQty).Error
 
 		var usedQty float64
-		_ = s.db.DB.Raw("SELECT COALESCE(SUM(qtyentered), 0) FROM c_orderline WHERE m_requisitionline_id = ?", *req.RequisitionLineID).Scan(&usedQty).Error
+		_ = s.db.DB.Raw("SELECT COALESCE(SUM(col.qtyentered), 0) FROM c_orderline col JOIN c_order co ON co.c_order_id = col.c_order_id WHERE col.m_requisitionline_id = ? AND co.docstatus NOT IN ('VO', 'RE')", *req.RequisitionLineID).Scan(&usedQty).Error
 
 		if (usedQty + req.Qty) > reqQty {
 			remaining := reqQty - usedQty
@@ -1034,6 +1075,10 @@ func (s *Service) CreateOrderLine(orderID int, req *CreateOrderLineRequest, clie
 		"adw_withholdingamount": withholdingAmt,
 	}
 
+	if orderOrgID > 0 {
+		payload["AD_Org_ID"] = orderOrgID
+	}
+
 	if req.ChargeID != nil && *req.ChargeID > 0 {
 		payload["C_Charge_ID"] = *req.ChargeID
 	} else if req.ProductID != nil && *req.ProductID > 0 {
@@ -1071,7 +1116,7 @@ func (s *Service) UpdateOrderLine(orderID, lineID int, req *UpdateOrderLineReque
 		_ = s.db.DB.Raw("SELECT qty FROM m_requisitionline WHERE m_requisitionline_id = ?", *req.RequisitionLineID).Scan(&reqQty).Error
 
 		var usedQty float64
-		_ = s.db.DB.Raw("SELECT COALESCE(SUM(qtyentered), 0) FROM c_orderline WHERE m_requisitionline_id = ? AND c_orderline_id != ?", *req.RequisitionLineID, lineID).Scan(&usedQty).Error
+		_ = s.db.DB.Raw("SELECT COALESCE(SUM(col.qtyentered), 0) FROM c_orderline col JOIN c_order co ON co.c_order_id = col.c_order_id WHERE col.m_requisitionline_id = ? AND col.c_orderline_id != ? AND co.docstatus NOT IN ('VO', 'RE')", *req.RequisitionLineID, lineID).Scan(&usedQty).Error
 
 		if (usedQty + req.Qty) > reqQty {
 			remaining := reqQty - usedQty
