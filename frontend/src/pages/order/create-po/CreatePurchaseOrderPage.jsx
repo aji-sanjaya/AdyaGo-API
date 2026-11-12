@@ -15,6 +15,7 @@ import {
   Loader2,
   Plus,
   Trash2,
+  Edit2,
   Search,
   ArrowUp,
   ArrowDown,
@@ -1891,13 +1892,150 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                   </div>
                 </div>
 
-                {/* Lines Table */}
+                {/* Lines Table Container */}
                 <div
                   className={`rounded-xl border transition-all duration-300 overflow-hidden w-full min-w-0 max-w-full ${
                     isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
                   }`}
                 >
-                  <div className="overflow-x-auto w-full max-w-full touch-pan-x">
+                  {/* Mobile Lines Card View (Visible only on < md screens) */}
+                  <div className="block md:hidden divide-y divide-slate-800/40">
+                    {paginatedLines.length === 0 ? (
+                      <div className="p-8 text-center font-mono text-slate-400 space-y-2">
+                        <Package className="w-8 h-8 mx-auto opacity-30 text-slate-400" />
+                        <p className="text-xs">
+                          {docLines.length === 0
+                            ? 'No purchase order lines found.'
+                            : 'No matching line items found for your search.'}
+                        </p>
+                      </div>
+                    ) : (
+                      paginatedLines.map((line, idx) => (
+                        <div
+                          key={line.id || idx}
+                          className={`p-4 transition-colors space-y-3 ${
+                            isDark ? 'bg-slate-900/30 hover:bg-slate-900/70' : 'bg-white hover:bg-slate-50/80'
+                          }`}
+                        >
+                          {/* Card Header */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="px-2 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-[10px] font-mono font-bold flex-shrink-0">
+                                #{line.line || idx + 1}
+                              </span>
+                              <span className="font-mono text-xs font-semibold text-slate-400 truncate">
+                                {line.product_value || 'Item'}
+                              </span>
+                            </div>
+
+                            {!isReadOnly && (
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedLineForEdit(line);
+                                    setShowLineModal(true);
+                                  }}
+                                  className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                                    isDark
+                                      ? 'bg-slate-800 hover:bg-slate-700 text-cyan-400 border-slate-700'
+                                      : 'bg-white hover:bg-slate-100 text-indigo-600 border-slate-200 shadow-sm'
+                                  }`}
+                                  title="Edit Line"
+                                >
+                                  <Settings className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setLinePendingDelete(line)}
+                                  className="p-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
+                                  title="Delete Line"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Product / Charge Name */}
+                          <div>
+                            <h4
+                              onClick={() => {
+                                if (!isReadOnly) {
+                                  setSelectedLineForEdit(line);
+                                  setShowLineModal(true);
+                                }
+                              }}
+                              className={`text-xs sm:text-sm font-mono font-bold leading-tight ${
+                                !isReadOnly ? 'cursor-pointer hover:underline text-cyan-400' : isDark ? 'text-slate-100' : 'text-slate-900'
+                              }`}
+                            >
+                              {line.product_name || line.charge_name || 'Line Item'}
+                            </h4>
+                            {line.description && (
+                              <p className="text-[11px] font-mono text-slate-400 mt-1 line-clamp-2">
+                                {line.description}
+                              </p>
+                            )}
+                            {line.m_requisitionline_id && (
+                              <span className="inline-flex items-center gap-1 mt-1 text-[10px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded font-mono">
+                                Linked PR #{line.m_requisitionline_id}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Key Metrics Grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
+                            {/* Qty & UoM */}
+                            <div
+                              className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                                isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                              }`}
+                            >
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                Quantity
+                              </span>
+                              <span className={`font-bold text-xs ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                {Number(line.qtyentered || line.qtyordered || 0).toLocaleString('en-US')}{' '}
+                                <span className="text-cyan-400 font-semibold">{line.uom_symbol || line.uom_name || ''}</span>
+                              </span>
+                            </div>
+
+                            {/* Unit Price */}
+                            <div
+                              className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                                isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                              }`}
+                            >
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                Unit Price
+                              </span>
+                              <span className={`font-bold text-xs ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                {formatCurrency(line.priceactual || line.priceentered)}
+                              </span>
+                            </div>
+
+                            {/* Line Total */}
+                            <div
+                              className={`col-span-2 sm:col-span-1 p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                                isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                              }`}
+                            >
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                Line Total
+                              </span>
+                              <span className="font-bold text-xs text-emerald-400">
+                                {formatCurrency(line.linenetamt || 0)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Desktop / Tablet Table View (Visible only on md+ screens) */}
+                  <div className="hidden md:block overflow-x-auto w-full max-w-full touch-pan-x">
                     <table className="w-full text-left text-xs min-w-[700px] border-collapse font-mono">
                       <thead>
                         <tr

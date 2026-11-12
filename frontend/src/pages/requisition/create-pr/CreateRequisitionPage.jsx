@@ -15,6 +15,7 @@ import {
   Loader2,
   Plus,
   Trash2,
+  Edit2,
   Search,
   ArrowUp,
   ArrowDown,
@@ -2065,7 +2066,244 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                       : 'bg-white border-slate-200 shadow-sm'
                   }`}
                 >
-                  <div className="overflow-x-auto w-full max-w-full touch-pan-x">
+                  {/* Mobile Lines Card View (Visible only on < md screens) */}
+                  <div className="block md:hidden divide-y divide-slate-800/40">
+                    {isUploadingExcel ? (
+                      <div className="p-6 text-center font-mono">
+                        <div className="max-w-md mx-auto space-y-4 px-2 animate-fadeIn">
+                          <div className="relative inline-flex items-center justify-center">
+                            <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-xl shadow-cyan-500/20">
+                              <FileSpreadsheet className="w-7 h-7 text-emerald-400 animate-pulse" />
+                            </div>
+                            <Loader2 className="w-16 h-16 absolute text-cyan-400 animate-spin opacity-80" />
+                          </div>
+                          <div>
+                            <h4
+                              className={`text-sm font-bold tracking-tight ${
+                                isDark ? 'text-white' : 'text-slate-900'
+                              }`}
+                            >
+                              Importing Excel Lines...
+                            </h4>
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              Row <b>{excelUploadProgress.current}</b> of{' '}
+                              <b>{excelUploadProgress.total}</b> ({excelUploadProgress.percent}%)
+                            </p>
+                          </div>
+                          <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700/50">
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-500 via-cyan-500 to-indigo-500 rounded-full transition-all duration-300"
+                              style={{ width: `${excelUploadProgress.percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : loadingLines ? (
+                      <div className="p-8 text-center font-mono text-slate-400 space-y-2">
+                        <Loader2 className="w-6 h-6 mx-auto animate-spin text-cyan-400" />
+                        <p className="text-xs">Loading requisition line items...</p>
+                      </div>
+                    ) : paginatedLines.length === 0 ? (
+                      <div className="p-8 text-center font-mono text-slate-400 space-y-2">
+                        <Package className="w-8 h-8 mx-auto opacity-30 text-slate-400" />
+                        <p className="text-xs">
+                          {docLines.length === 0
+                            ? 'No requisition line items found.'
+                            : 'No matching line items found for your search.'}
+                        </p>
+                      </div>
+                    ) : (
+                      paginatedLines.map((line) => {
+                        const lineTotal =
+                          Number(line.qty || 0) * Number(line.priceactual || 0);
+                        return (
+                          <div
+                            key={line.id}
+                            className={`p-4 transition-colors space-y-3 ${
+                              isDark
+                                ? 'bg-slate-900/30 hover:bg-slate-900/70'
+                                : 'bg-white hover:bg-slate-50/80'
+                            }`}
+                          >
+                            {/* Card Header: Line Badge, Product Code, PO-Linked, Delete */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="px-2 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-[10px] font-mono font-bold flex-shrink-0">
+                                  #{line.line}
+                                </span>
+                                <span className="font-mono text-xs font-semibold text-slate-400 truncate">
+                                  {line.product_code || 'No Code'}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {line.is_po_linked && (
+                                  <span
+                                    className="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-amber-500/15 text-amber-500 border border-amber-500/30"
+                                    title={`Linked to PO. Ordered: ${Number(
+                                      line.total_ordered_qty || 0
+                                    ).toLocaleString('en-US')}`}
+                                  >
+                                    PO Linked
+                                  </span>
+                                )}
+
+                                {!isReadOnly && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteLine(line);
+                                    }}
+                                    disabled={
+                                      deletingLineId === line.id || line.is_po_linked
+                                    }
+                                    className={`p-1.5 rounded-lg border transition ${
+                                      line.is_po_linked
+                                        ? 'opacity-40 cursor-not-allowed border-slate-700/60 text-slate-500'
+                                        : isDark
+                                        ? 'cursor-pointer border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10'
+                                        : 'cursor-pointer border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50'
+                                    }`}
+                                    title={
+                                      line.is_po_linked
+                                        ? 'Cannot delete line linked to PO'
+                                        : 'Delete line item'
+                                    }
+                                  >
+                                    {deletingLineId === line.id ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                                    ) : (
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Product Name */}
+                            <div>
+                              <h4
+                                onClick={() => {
+                                  if (!isReadOnly) {
+                                    setSelectedLineForEdit(line);
+                                    setShowAddLineModal(true);
+                                  }
+                                }}
+                                className={`text-xs sm:text-sm font-mono font-bold leading-tight ${
+                                  !isReadOnly
+                                    ? 'cursor-pointer hover:underline text-cyan-400'
+                                    : isDark
+                                    ? 'text-slate-100'
+                                    : 'text-slate-900'
+                                }`}
+                              >
+                                {line.product_name || '-'}
+                              </h4>
+                              {line.description && (
+                                <p className="text-[11px] font-mono text-slate-400 mt-1 line-clamp-2">
+                                  {line.description}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Metrics Grid: Qty/UOM, Unit Price, Line Total */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
+                              {/* Quantity & UOM */}
+                              <div
+                                className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                                  isDark
+                                    ? 'bg-slate-950/50 border-slate-800/80'
+                                    : 'bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                  Quantity
+                                </span>
+                                <span
+                                  className={`font-bold text-xs ${
+                                    isDark ? 'text-slate-200' : 'text-slate-800'
+                                  }`}
+                                >
+                                  {Number(line.qty).toLocaleString('en-US', {
+                                    minimumFractionDigits: line.uom_precision ?? 0,
+                                    maximumFractionDigits: line.uom_precision ?? 0,
+                                  })}{' '}
+                                  <span className="text-cyan-400 font-semibold">
+                                    {line.uom_name || ''}
+                                  </span>
+                                </span>
+                              </div>
+
+                              {/* Unit Price */}
+                              <div
+                                className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                                  isDark
+                                    ? 'bg-slate-950/50 border-slate-800/80'
+                                    : 'bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                  Unit Price
+                                </span>
+                                <span
+                                  className={`font-bold text-xs ${
+                                    isDark ? 'text-slate-200' : 'text-slate-800'
+                                  }`}
+                                >
+                                  Rp{' '}
+                                  {Number(line.priceactual || 0).toLocaleString('en-US', {
+                                    minimumFractionDigits: activePricePrecision,
+                                    maximumFractionDigits: activePricePrecision,
+                                  })}
+                                </span>
+                              </div>
+
+                              {/* Line Total */}
+                              <div
+                                className={`col-span-2 sm:col-span-1 p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                                  isDark
+                                    ? 'bg-slate-950/50 border-slate-800/80'
+                                    : 'bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                  Line Total
+                                </span>
+                                <span className="font-bold text-xs text-emerald-400">
+                                  Rp{' '}
+                                  {lineTotal.toLocaleString('en-US', {
+                                    minimumFractionDigits: activePricePrecision,
+                                    maximumFractionDigits: activePricePrecision,
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Card Footer: Edit Action */}
+                            {!isReadOnly && (
+                              <div className="pt-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedLineForEdit(line);
+                                    setShowAddLineModal(true);
+                                  }}
+                                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-cyan-400 text-xs font-mono font-bold transition active:scale-[0.99] cursor-pointer"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                  <span>Edit Line Item</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Desktop / Tablet Table View (Visible only on md+ screens) */}
+                  <div className="hidden md:block overflow-x-auto w-full max-w-full touch-pan-x">
                     <table className="w-full text-left text-xs min-w-[700px]">
                       <thead>
                         <tr
