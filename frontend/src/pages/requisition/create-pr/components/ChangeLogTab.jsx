@@ -247,103 +247,197 @@ export default function ChangeLogTab({ targetId, isDark, onTotalLogsChange }) {
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto w-full">
-            <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead
-                className={`text-[10px] uppercase font-bold border-b ${
-                  isDark
-                    ? 'bg-slate-950/60 border-slate-800 text-slate-400'
-                    : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}
-              >
-                <tr>
-                  <th className="py-3 px-4 w-12 text-center">#</th>
-                  <th className="py-3 px-4">Updated At</th>
-                  <th className="py-3 px-4">User</th>
-                  <th className="py-3 px-4">Target</th>
-                  <th className="py-3 px-4">Event</th>
-                  <th className="py-3 px-4">Field / Column</th>
-                  <th className="py-3 px-4">Old Value</th>
-                  <th className="py-3 px-4">New Value</th>
-                </tr>
-              </thead>
-              <tbody
-                className={`divide-y text-[11px] ${
-                  isDark ? 'divide-slate-800/60' : 'divide-slate-100'
-                }`}
-              >
-                {paginatedLogs.map((log, index) => {
-                  const rowNumber = (page - 1) * limit + index + 1;
-                  return (
-                    <tr
-                      key={log.ad_changelog_id || index}
-                      className={`transition-colors ${
-                        isDark ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50/70'
-                      }`}
-                    >
-                      <td className="py-2.5 px-4 text-center text-slate-500 font-bold">
-                        {rowNumber}
-                      </td>
-                      <td className="py-2.5 px-4 font-mono text-slate-400 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-slate-500" />
+          <>
+            {/* Mobile Audit Logs Card View (Visible only on small screens: < md) */}
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+              {paginatedLogs.map((log, index) => {
+                const rowNumber = (page - 1) * limit + index + 1;
+                return (
+                  <div
+                    key={log.ad_changelog_id || index}
+                    className={`p-4 space-y-3 transition-colors ${
+                      isDark ? 'bg-slate-900/30 hover:bg-slate-900/70' : 'bg-white hover:bg-slate-50/80'
+                    }`}
+                  >
+                    {/* Header: Row #, Target, Event, and Timestamp */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="px-2 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-[10px] font-mono font-bold flex-shrink-0">
+                          #{rowNumber}
+                        </span>
+                        {getTargetBadge(log.table_name)}
+                        {getEventBadge(log.eventchangelog)}
+                      </div>
+                      <div className="flex items-center gap-1 text-[10px] text-slate-400 whitespace-nowrap flex-shrink-0">
+                        <Clock className="w-3 h-3 text-slate-400" />
                         <span>{formatDate(log.updated)}</span>
-                      </td>
-                      <td className="py-2.5 px-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-[10px] font-bold">
-                            {(log.updated_by_name || 'U').charAt(0).toUpperCase()}
-                          </div>
-                          <span
-                            className={`font-semibold ${
-                              isDark ? 'text-slate-200' : 'text-slate-800'
-                            }`}
-                          >
-                            {log.updated_by_name || 'System'}
+                      </div>
+                    </div>
+
+                    {/* Column / Field Info & User */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate block">
+                          {log.column_label || log.columnname}
+                        </span>
+                        {log.column_label && log.columnname !== log.column_label && (
+                          <span className="text-[10px] text-slate-400 block truncate">
+                            {log.columnname}
                           </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <div className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-[10px] font-bold">
+                          {(log.updated_by_name || 'U').charAt(0).toUpperCase()}
                         </div>
-                      </td>
-                      <td className="py-2.5 px-4">{getTargetBadge(log.table_name)}</td>
-                      <td className="py-2.5 px-4">{getEventBadge(log.eventchangelog)}</td>
-                      <td className="py-2.5 px-4">
-                        <div>
-                          <p
-                            className={`font-bold ${
-                              isDark ? 'text-slate-200' : 'text-slate-800'
-                            }`}
-                          >
-                            {log.column_label || log.columnname}
-                          </p>
-                          {log.column_label && log.columnname !== log.column_label && (
-                            <p className="text-[10px] text-slate-500">
-                              {log.columnname}
-                            </p>
+                        <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                          {log.updated_by_name || 'System'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Values Diff Grid */}
+                    <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                      {/* Old Value */}
+                      <div
+                        className={`p-2.5 rounded-xl border flex flex-col gap-1 ${
+                          isDark ? 'bg-rose-950/20 border-rose-900/40' : 'bg-rose-50/70 border-rose-200'
+                        }`}
+                      >
+                        <span className="text-[10px] text-rose-500/80 dark:text-rose-400/80 uppercase tracking-wider font-semibold">
+                          Old Value
+                        </span>
+                        <span className="text-xs font-medium text-rose-600 dark:text-rose-400 break-all">
+                          {log.oldvalue ? (
+                            log.oldvalue
+                          ) : (
+                            <span className="italic text-slate-400 font-normal">null</span>
                           )}
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-4 font-mono max-w-xs truncate">
-                        {log.oldvalue ? (
-                          <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 line-through">
-                            {log.oldvalue}
-                          </span>
-                        ) : (
-                          <span className="text-slate-500 italic">null</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-4 font-mono max-w-xs truncate">
-                        {log.newvalue ? (
-                          <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
-                            {log.newvalue}
-                          </span>
-                        ) : (
-                          <span className="text-slate-500 italic">null</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </span>
+                      </div>
+
+                      {/* New Value */}
+                      <div
+                        className={`p-2.5 rounded-xl border flex flex-col gap-1 ${
+                          isDark ? 'bg-emerald-950/20 border-emerald-900/40' : 'bg-emerald-50/70 border-emerald-200'
+                        }`}
+                      >
+                        <span className="text-[10px] text-emerald-500/80 dark:text-emerald-400/80 uppercase tracking-wider font-semibold">
+                          New Value
+                        </span>
+                        <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 break-all">
+                          {log.newvalue ? (
+                            log.newvalue
+                          ) : (
+                            <span className="italic text-slate-400 font-normal">null</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table View (Visible only on md+ screens) */}
+            <div className="hidden md:block overflow-x-auto w-full">
+              <table className="w-full text-left text-xs whitespace-nowrap">
+                <thead
+                  className={`text-[10px] uppercase font-bold border-b ${
+                    isDark
+                      ? 'bg-slate-950/60 border-slate-800 text-slate-400'
+                      : 'bg-slate-50 border-slate-200 text-slate-600'
+                  }`}
+                >
+                  <tr>
+                    <th className="py-3 px-4 w-12 text-center">#</th>
+                    <th className="py-3 px-4">Updated At</th>
+                    <th className="py-3 px-4">User</th>
+                    <th className="py-3 px-4">Target</th>
+                    <th className="py-3 px-4">Event</th>
+                    <th className="py-3 px-4">Field / Column</th>
+                    <th className="py-3 px-4">Old Value</th>
+                    <th className="py-3 px-4">New Value</th>
+                  </tr>
+                </thead>
+                <tbody
+                  className={`divide-y text-[11px] ${
+                    isDark ? 'divide-slate-800/60' : 'divide-slate-100'
+                  }`}
+                >
+                  {paginatedLogs.map((log, index) => {
+                    const rowNumber = (page - 1) * limit + index + 1;
+                    return (
+                      <tr
+                        key={log.ad_changelog_id || index}
+                        className={`transition-colors ${
+                          isDark ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50/70'
+                        }`}
+                      >
+                        <td className="py-2.5 px-4 text-center text-slate-500 font-bold">
+                          {rowNumber}
+                        </td>
+                        <td className="py-2.5 px-4 font-mono text-slate-400 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-500" />
+                          <span>{formatDate(log.updated)}</span>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-[10px] font-bold">
+                              {(log.updated_by_name || 'U').charAt(0).toUpperCase()}
+                            </div>
+                            <span
+                              className={`font-semibold ${
+                                isDark ? 'text-slate-200' : 'text-slate-800'
+                              }`}
+                            >
+                              {log.updated_by_name || 'System'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4">{getTargetBadge(log.table_name)}</td>
+                        <td className="py-2.5 px-4">{getEventBadge(log.eventchangelog)}</td>
+                        <td className="py-2.5 px-4">
+                          <div>
+                            <p
+                              className={`font-bold ${
+                                isDark ? 'text-slate-200' : 'text-slate-800'
+                              }`}
+                            >
+                              {log.column_label || log.columnname}
+                            </p>
+                            {log.column_label && log.columnname !== log.column_label && (
+                              <p className="text-[10px] text-slate-500">
+                                {log.columnname}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4 font-mono max-w-xs truncate">
+                          {log.oldvalue ? (
+                            <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 line-through">
+                              {log.oldvalue}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 italic">null</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-4 font-mono max-w-xs truncate">
+                          {log.newvalue ? (
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                              {log.newvalue}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 italic">null</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {/* Pagination Footer */}

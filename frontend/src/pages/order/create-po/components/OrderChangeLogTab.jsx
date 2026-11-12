@@ -177,11 +177,91 @@ export default function OrderChangeLogTab({ orderId, isDark, onTotalLogsChange }
         </div>
       )}
 
-      {/* Logs Table */}
+      {/* Logs Table / Cards Container */}
       {!loading && filteredLogs.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden w-full">
+          {/* Mobile Audit Logs Card View (Visible only on small screens: < md) */}
+          <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+            {paginatedLogs.map((log) => (
+              <div
+                key={log.ad_changelog_id}
+                className={`p-4 space-y-3 transition-colors ${
+                  isDark ? 'bg-slate-900/30 hover:bg-slate-900/70' : 'bg-white hover:bg-slate-50/80'
+                }`}
+              >
+                {/* Header: Scope, Column Name, and Timestamp */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {getTargetBadge(log.table_name)}
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate block">
+                        {log.column_name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block truncate">
+                        {log.table_name} #{log.record_id}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-[10px] text-slate-400 whitespace-nowrap flex-shrink-0">
+                    <Clock className="w-3 h-3 text-slate-400" />
+                    <span>{formatDate(log.created)}</span>
+                  </div>
+                </div>
+
+                {/* User Info */}
+                <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+                  <User className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <span className="text-[11px] font-semibold text-slate-400">User:</span>
+                  <span className="text-[11px] font-medium text-slate-800 dark:text-slate-200 truncate">
+                    {log.user_name || 'System'}
+                  </span>
+                </div>
+
+                {/* Values Diff Grid */}
+                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                  {/* Old Value */}
+                  <div
+                    className={`p-2.5 rounded-xl border flex flex-col gap-1 ${
+                      isDark ? 'bg-rose-950/20 border-rose-900/40' : 'bg-rose-50/70 border-rose-200'
+                    }`}
+                  >
+                    <span className="text-[10px] text-rose-500/80 dark:text-rose-400/80 uppercase tracking-wider font-semibold">
+                      Old Value
+                    </span>
+                    <span className="text-xs font-medium text-rose-600 dark:text-rose-400 break-all">
+                      {log.old_value ? (
+                        log.old_value
+                      ) : (
+                        <span className="italic text-slate-400 font-normal">null</span>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* New Value */}
+                  <div
+                    className={`p-2.5 rounded-xl border flex flex-col gap-1 ${
+                      isDark ? 'bg-emerald-950/20 border-emerald-900/40' : 'bg-emerald-50/70 border-emerald-200'
+                    }`}
+                  >
+                    <span className="text-[10px] text-emerald-500/80 dark:text-emerald-400/80 uppercase tracking-wider font-semibold">
+                      New Value
+                    </span>
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 break-all">
+                      {log.new_value ? (
+                        log.new_value
+                      ) : (
+                        <span className="italic text-slate-400 font-normal">null</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop / Tablet Table View (Visible only on md+ screens) */}
+          <div className="hidden md:block overflow-x-auto w-full max-w-full touch-pan-x">
+            <table className="w-full text-xs text-left min-w-[700px] border-collapse">
               <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 text-[11px]">
                 <tr>
                   <th className="py-3 px-4 w-40">Date & Time</th>
@@ -246,8 +326,8 @@ export default function OrderChangeLogTab({ orderId, isDark, onTotalLogsChange }
           </div>
 
           {/* Pagination */}
-          <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
-            <div>
+          <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+            <div className="text-center sm:text-left">
               Showing <span className="font-semibold text-slate-700 dark:text-slate-300">{(page - 1) * limit + 1}</span> to{' '}
               <span className="font-semibold text-slate-700 dark:text-slate-300">
                 {Math.min(page * limit, filteredLogs.length)}
@@ -260,7 +340,7 @@ export default function OrderChangeLogTab({ orderId, isDark, onTotalLogsChange }
                 type="button"
                 onClick={() => setPage(1)}
                 disabled={page === 1}
-                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 cursor-pointer"
               >
                 <ChevronsLeft className="w-4 h-4" />
               </button>
@@ -268,7 +348,7 @@ export default function OrderChangeLogTab({ orderId, isDark, onTotalLogsChange }
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -279,7 +359,7 @@ export default function OrderChangeLogTab({ orderId, isDark, onTotalLogsChange }
                 type="button"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 cursor-pointer"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -287,7 +367,7 @@ export default function OrderChangeLogTab({ orderId, isDark, onTotalLogsChange }
                 type="button"
                 onClick={() => setPage(totalPages)}
                 disabled={page === totalPages}
-                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 cursor-pointer"
               >
                 <ChevronsRight className="w-4 h-4" />
               </button>
