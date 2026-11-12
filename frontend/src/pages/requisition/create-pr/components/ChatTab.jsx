@@ -18,6 +18,7 @@ export default function ChatTab({
   session,
   isDark,
   onTokenExpired,
+  onChatCountChange,
 }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -73,8 +74,14 @@ export default function ChatTab({
       const res = await requisitionApi.getChat(requisitionId);
       if (res && res.data) {
         setMessages(res.data);
+        if (typeof onChatCountChange === 'function') {
+          onChatCountChange(res.data.length);
+        }
       } else {
         setMessages([]);
+        if (typeof onChatCountChange === 'function') {
+          onChatCountChange(0);
+        }
       }
     } catch (err) {
       console.error('Failed to load chat:', err);

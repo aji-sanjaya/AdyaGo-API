@@ -772,38 +772,34 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
     setActiveTab(newTab);
 
     if (!isNew && targetId) {
-      setTabLoading(true);
-      const startTime = Date.now();
-      try {
-        if (newTab === 'attachments') {
+      if (newTab === 'attachments') {
+        setTabLoading(true);
+        const startTime = Date.now();
+        try {
           await loadAttachments();
-        } else if (newTab === 'chat') {
-          const res = await orderApi.getChat(targetId).catch(() => null);
-          if (res && res.data) setChatCount(res.data.length);
-        } else if (newTab === 'requisitions') {
-          const res = await orderApi.getLinkedRequisitions(targetId).catch(() => null);
-          if (res && res.data) setRequisitionCount(res.data.length);
-        } else if (newTab === 'receipts') {
-          const res = await orderApi.getLinkedReceipts(targetId).catch(() => null);
-          if (res && res.data) setReceiptCount(res.data.length);
-        } else if (newTab === 'changelog') {
-          const res = await orderApi.getChangeLogs(targetId).catch(() => null);
-          if (res && res.data) setChangeLogCount(res.data.length);
-        } else if (newTab === 'header') {
+        } catch (err) {
+          console.error('Failed to retrieve attachments on tab switch:', err);
+        } finally {
+          const elapsed = Date.now() - startTime;
+          setTimeout(() => setTabLoading(false), Math.max(0, 200 - elapsed));
+        }
+      } else if (newTab === 'header') {
+        setTabLoading(true);
+        const startTime = Date.now();
+        try {
           const detailRes = await orderApi.getOrder(targetId);
           if (detailRes && detailRes.data) {
             applyRecordData(detailRes.data.header, null, true);
           }
+        } catch (err) {
+          console.error('Failed to retrieve header details on tab switch:', err);
+        } finally {
+          const elapsed = Date.now() - startTime;
+          setTimeout(() => setTabLoading(false), Math.max(0, 200 - elapsed));
         }
-      } catch (err) {
-        console.error('Failed to retrieve latest data on tab switch:', err);
-      } finally {
-        const elapsed = Date.now() - startTime;
-        const delay = Math.max(0, 250 - elapsed);
-        setTimeout(() => {
-          setTabLoading(false);
-        }, delay);
       }
+      // Note: 'chat', 'requisitions', 'receipts', and 'changelog' tabs are self-contained
+      // components with their own fetch lifecycle. Bypassing redundant parent fetch avoids duplicate hits.
     }
   };
 
@@ -2268,6 +2264,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                 session={session}
                 isDark={isDark}
                 onTokenExpired={() => setShowReauthModal(true)}
+                onChatCountChange={(count) => setChatCount(count)}
               />
             )}
 
