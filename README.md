@@ -13,29 +13,29 @@
 ## Architecture Overview
 
 ```
-+-------------------------------------------------------+
-|                 AdyaGo Web Frontend                  |
-|       (React 18 + Vite + Tailwind CSS + Lucide)       |
-|                 http://localhost:5173                 |
-+---------------------------+---------------------------+
-                            |
-                     REST / JSON API
-                            |
-                            v
-+-------------------------------------------------------+
-|                  AdyaGo API Backend                   |
-|                   (Golang + Gin)                      |
-|                 http://localhost:8080                 |
-+---------------------+-------------------+-------------+
++---------------------------------------------------------------------------+
+|                           AdyaGo Web Frontend                             |
+|                (React 18 + Vite + Tailwind CSS + Lucide)                  |
+|                          http://localhost:5173                            |
++-------------------------------------+-------------------------------------+
+                                      |
+                               REST / JSON API
+                                      |
+                                      v
++--------------------------------------------------------------------------+
+|                            AdyaGo API Backend                            |
+|                              (Golang + Gin)                              |
+|                          http://localhost:8080                           |
++---------------------+-------------------+--------------------------------+
                       |                   |
             Direct PostgreSQL (Read-Only) | iDempiere REST API (v1)
                       |                   | (Auth, Actions, Tokens)
                       v                   v
-+-------------------------------------------------------+
-|                    iDempiere ERP                      |
-|        PostgreSQL Database (100.103.195.31:5432)       |
-| REST API Engine (https://adyago-idempiere-13.stampingadyawinsa.com) |
-+-------------------------------------------------------+
++-------------------------------------------------------------------------+
+|                             iDempiere ERP                               |
+|                 PostgreSQL Database (100.103.195.31:5432)               |
+|   REST API Engine (https://adyago-idempiere-13.stampingadyawinsa.com)   |
++-------------------------------------------------------------------------+
 ```
 
 ### Tech Stack
