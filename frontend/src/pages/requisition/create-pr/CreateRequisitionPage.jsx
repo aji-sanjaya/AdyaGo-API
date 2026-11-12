@@ -61,6 +61,7 @@ import ChangeLogTab from './components/ChangeLogTab';
 import OrderTab from './components/OrderTab';
 import PrintPreviewModal from './components/PrintPreviewModal';
 import InvalidDocumentState from '../../../components/common/InvalidDocumentState';
+import PdfJsViewer from '../../../components/common/PdfJsViewer';
 
 export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
   const navigate = useNavigate();
@@ -2887,18 +2888,19 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                     <span className="text-xs font-semibold">Loading PDF preview...</span>
                   </div>
                 ) : (
-                  <iframe
-                    src={
-                      pdfBlobUrl ||
-                      requisitionApi.getAttachmentDownloadUrl(
-                        targetId,
-                        previewAttachment.file_name,
-                        false
-                      )
-                    }
-                    title={previewAttachment.file_name}
-                    className="w-full h-[75vh] rounded-lg border border-slate-700/50 bg-white"
-                  />
+                  <div className="w-full h-[75vh] rounded-xl overflow-hidden border border-slate-700/50">
+                    <PdfJsViewer
+                      url={
+                        pdfBlobUrl ||
+                        requisitionApi.getAttachmentDownloadUrl(
+                          targetId,
+                          previewAttachment.file_name,
+                          false
+                        )
+                      }
+                      fileName={previewAttachment.file_name}
+                    />
+                  </div>
                 )
               ) : (
                 <div className="py-16 text-center space-y-4">

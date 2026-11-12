@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer, Download, Loader2, FileText, AlertCircle } from 'lucide-react';
 import { generateRequisitionPdf } from '../../../../utils/requisitionPdfGenerator';
+import PdfJsViewer from '../../../../components/common/PdfJsViewer';
 
 const PrintPreviewModal = ({
   isOpen,
@@ -213,12 +214,19 @@ const PrintPreviewModal = ({
           )}
 
           {!loading && !error && pdfUrl && (
-            <iframe
-              ref={iframeRef}
-              src={pdfUrl}
-              title={`Purchase Requisition ${docNo}`}
-              className="w-full h-full border-0 bg-slate-900"
-            />
+            <>
+              <PdfJsViewer
+                url={pdfUrl}
+                fileName={`Purchase_Requisition_${docNo}.pdf`}
+              />
+              <iframe
+                ref={iframeRef}
+                src={pdfUrl}
+                title={`Purchase Requisition ${docNo} Print Frame`}
+                className="hidden"
+                style={{ display: 'none' }}
+              />
+            </>
           )}
         </div>
       </div>
