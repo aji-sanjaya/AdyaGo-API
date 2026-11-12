@@ -697,6 +697,16 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
       return;
     }
 
+    // Security validation: strictly allow only genuine PDF and Image files
+    const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
+    const fileExt = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+    if (!allowedExtensions.includes(fileExt) || (file.type && !allowedMimes.includes(file.type.toLowerCase()))) {
+      setAttachmentError('Security validation failed: Only PDF and Image files (JPG, PNG, WEBP) are allowed.');
+      return;
+    }
+
     setUploadingAttachment(true);
     setAttachmentError(null);
     try {
@@ -2433,6 +2443,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                     <input
                       ref={fileInputRef}
                       type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                       className="hidden"
                       onChange={handleFileUpload}
                       disabled={uploadingAttachment}
@@ -2473,7 +2484,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                           )}
                         </p>
                         <p className="text-[11px] text-slate-400 mt-1">
-                          Supports PDF, PNG, JPG, JPEG, WEBP, DOCX, XLSX (Max 10 MB per file)
+                          Supports PDF, PNG, JPG, JPEG, WEBP (Max 10 MB per file)
                         </p>
                       </div>
                     </div>

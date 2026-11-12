@@ -708,6 +708,16 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       return;
     }
 
+    // Security validation: strictly allow only genuine PDF and Image files
+    const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
+    const fileExt = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+    if (!allowedExtensions.includes(fileExt) || (file.type && !allowedMimes.includes(file.type.toLowerCase()))) {
+      setAttachmentError('Security validation failed: Only PDF and Image files (JPG, PNG, WEBP) are allowed.');
+      return;
+    }
+
     setUploadingAttachment(true);
     setAttachmentError(null);
     try {
@@ -2166,6 +2176,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                       <input
                         type="file"
                         ref={fileInputRef}
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                         onChange={handleFileUpload}
                         className="hidden"
                       />

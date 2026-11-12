@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"factoryhub-go/internal/security"
 	"github.com/gin-gonic/gin"
 )
 
@@ -463,8 +464,18 @@ func (h *Handler) UploadAttachment(c *gin.Context) {
 		return
 	}
 
+	// Security verification: extension whitelist, magic bytes, path traversal sanitization, max size
+	sanitizedFilename, _, err := security.ValidateAttachment(fileHeader.Filename, fileBytes, 10*1024*1024)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
 	token := h.extractToken(c)
-	res, err := h.service.UploadRequisitionAttachment(token, id, fileHeader.Filename, fileBytes)
+	res, err := h.service.UploadRequisitionAttachment(token, id, sanitizedFilename, fileBytes)
 	if err != nil {
 		h.respondError(c, err)
 		return
@@ -605,7 +616,16 @@ func (h *Handler) SendChatMessage(c *gin.Context) {
 			defer f.Close()
 			fb, err := io.ReadAll(f)
 			if err == nil {
-				fileName = fileHeader.Filename
+				// Security verification for chat attachment (max 5MB)
+				sanitizedFilename, _, vErr := security.ValidateAttachment(fileHeader.Filename, fb, 5*1024*1024)
+				if vErr != nil {
+					c.JSON(http.StatusBadRequest, gin.H{
+						"success": false,
+						"message": vErr.Error(),
+					})
+					return
+				}
+				fileName = sanitizedFilename
 				fileBytes = fb
 			}
 		}

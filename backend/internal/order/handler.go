@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"factoryhub-go/internal/security"
 	"github.com/gin-gonic/gin"
 )
 
@@ -518,7 +519,18 @@ func (h *Handler) UploadAttachment(c *gin.Context) {
 		return
 	}
 
-	res, err := h.service.UploadAttachment(token, id, header.Filename, fileBytes)
+	// Security verification: extension whitelist, magic bytes, path traversal sanitization, max size
+	sanitizedName, _, err := security.ValidateAttachment(header.Filename, fileBytes, 10*1024*1024)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"message": err.Error(),
+		})
+		return
+	}
+
+	res, err := h.service.UploadAttachment(token, id, sanitizedName, fileBytes)
 	if err != nil {
 		h.respondError(c, err)
 		return
@@ -587,8 +599,20 @@ func (h *Handler) SendChatMessage(c *gin.Context) {
 	file, header, err := c.Request.FormFile("image")
 	if err == nil && file != nil {
 		defer file.Close()
-		fileName = header.Filename
-		fileData, _ = io.ReadAll(file)
+		fb, err := io.ReadAll(file)
+		if err == nil && len(fb) > 0 {
+			sanitizedName, _, vErr := security.ValidateAttachment(header.Filename, fb, 5*1024*1024)
+			if vErr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"error":   vErr.Error(),
+					"message": vErr.Error(),
+				})
+				return
+			}
+			fileName = sanitizedName
+			fileData = fb
+		}
 	}
 
 	if err := h.service.SendChatMessage(token, id, clientID, userID, message, fileData, fileName); err != nil {
