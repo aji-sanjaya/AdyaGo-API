@@ -134,71 +134,232 @@ export default function LinkedReceiptsTab({ orderId, isDark, onTotalCountChange 
         </div>
       )}
 
-      {/* Receipts List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filteredReceipts.map((rcpt) => (
-          <div
-            key={rcpt.m_inout_id}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <span className="font-semibold text-slate-900 dark:text-slate-100 text-base flex items-center gap-1.5">
-                  <PackageCheck className="w-4 h-4 text-primary-500" />
-                  {rcpt.documentno}
-                </span>
-                <span className="text-xs text-slate-400">{rcpt.doctype_name || 'Material Receipt'}</span>
+      {/* Receipts Container with Mobile Card View & Desktop Table View */}
+      {filteredReceipts.length > 0 && (
+        <div
+          className={`rounded-xl border transition-all duration-300 overflow-hidden w-full min-w-0 max-w-full ${
+            isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+          }`}
+        >
+          {/* Mobile Receipts Card View (Visible only on < md screens) */}
+          <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+            {filteredReceipts.map((rcpt) => (
+              <div
+                key={rcpt.m_inout_id}
+                className={`p-4 space-y-3 transition-colors ${
+                  isDark ? 'bg-slate-900/30 hover:bg-slate-900/70' : 'bg-white hover:bg-slate-50/80'
+                }`}
+              >
+                {/* Header: Doc Number & Status */}
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center flex-shrink-0">
+                      <PackageCheck className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-mono font-bold text-sm text-blue-500 dark:text-cyan-400 block truncate">
+                        {rcpt.documentno}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400 block truncate">
+                        {rcpt.doctype_name || 'Material Receipt'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0">
+                    {getStatusBadge(rcpt.docstatus, rcpt.docstatus_label)}
+                  </div>
+                </div>
+
+                {/* Key Metrics Grid */}
+                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                  {/* Movement Date */}
+                  <div
+                    className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1 font-semibold">
+                      <Calendar className="w-3 h-3 text-cyan-400" />
+                      <span>Movement</span>
+                    </span>
+                    <span className={`font-bold text-xs ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                      {rcpt.movementdate || '-'}
+                    </span>
+                  </div>
+
+                  {/* Warehouse */}
+                  <div
+                    className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1 font-semibold">
+                      <Warehouse className="w-3 h-3 text-indigo-400" />
+                      <span>Warehouse</span>
+                    </span>
+                    <span className={`font-bold text-xs truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                      {rcpt.warehouse_name || '-'}
+                    </span>
+                  </div>
+
+                  {/* SPP No */}
+                  <div
+                    className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                      SPP No
+                    </span>
+                    <span className={`font-bold text-xs truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                      {rcpt.sppno || '-'}
+                    </span>
+                  </div>
+
+                  {/* DO Reference */}
+                  <div
+                    className={`p-2.5 rounded-xl border flex flex-col gap-0.5 ${
+                      isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                      DO Ref
+                    </span>
+                    <span className={`font-bold text-xs truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                      {rcpt.doreference || '-'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Vendor & Creator Info */}
+                <div
+                  className={`text-xs font-mono p-2.5 rounded-xl border space-y-1 ${
+                    isDark
+                      ? 'bg-slate-950/30 border-slate-800/60 text-slate-300'
+                      : 'bg-slate-50/70 border-slate-200 text-slate-600'
+                  }`}
+                >
+                  {rcpt.vendor_name && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <Building2 className="w-3 h-3 text-indigo-400" /> Vendor:
+                      </span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
+                        {rcpt.vendor_name}
+                      </span>
+                    </div>
+                  )}
+                  {rcpt.creator_name && (
+                    <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800/40 pt-1">
+                      <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <User className="w-3 h-3 text-cyan-400" /> Created By:
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
+                        {rcpt.creator_name}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Description Note */}
+                {rcpt.description && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-950/50 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 font-mono">
+                    "{rcpt.description}"
+                  </p>
+                )}
               </div>
-              {getStatusBadge(rcpt.docstatus, rcpt.docstatus_label)}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400">
-              {rcpt.movementdate && (
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Movement: {rcpt.movementdate}</span>
-                </div>
-              )}
-              {rcpt.warehouse_name && (
-                <div className="flex items-center gap-1.5">
-                  <Warehouse className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="truncate">{rcpt.warehouse_name}</span>
-                </div>
-              )}
-              {rcpt.sppno && (
-                <div className="flex items-center gap-1.5">
-                  <span className="font-medium text-slate-700 dark:text-slate-300">SPP No:</span>
-                  <span className="font-mono text-slate-800 dark:text-slate-200">{rcpt.sppno}</span>
-                </div>
-              )}
-              {rcpt.doreference && (
-                <div className="flex items-center gap-1.5">
-                  <span className="font-medium text-slate-700 dark:text-slate-300">DO Ref:</span>
-                  <span className="truncate text-slate-800 dark:text-slate-200">{rcpt.doreference}</span>
-                </div>
-              )}
-              {rcpt.vendor_name && (
-                <div className="col-span-2 flex items-center gap-1.5 pt-1">
-                  <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{rcpt.vendor_name}</span>
-                </div>
-              )}
-              {rcpt.creator_name && (
-                <div className="col-span-2 flex items-center gap-1.5 text-slate-400">
-                  <User className="w-3.5 h-3.5" />
-                  <span>Created by {rcpt.creator_name}</span>
-                </div>
-              )}
-            </div>
-
-            {rcpt.description && (
-              <p className="text-xs text-slate-500 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                "{rcpt.description}"
-              </p>
-            )}
+            ))}
           </div>
-        ))}
-      </div>
+
+          {/* Desktop / Tablet Table View (Visible only on md+ screens) */}
+          <div className="hidden md:block overflow-x-auto w-full max-w-full touch-pan-x">
+            <table className="w-full text-xs text-left min-w-[700px] border-collapse">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-semibold font-mono text-[10px] uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                <tr>
+                  <th className="py-3 px-4">Receipt No</th>
+                  <th className="py-3 px-4">Doc Type</th>
+                  <th className="py-3 px-4">Movement Date</th>
+                  <th className="py-3 px-4">DO Ref / SPP</th>
+                  <th className="py-3 px-4">Warehouse</th>
+                  <th className="py-3 px-4">Vendor / Supplier</th>
+                  <th className="py-3 px-4 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-mono">
+                {filteredReceipts.map((rcpt) => (
+                  <tr
+                    key={rcpt.m_inout_id}
+                    className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
+                  >
+                    {/* Document No */}
+                    <td className="py-3 px-4 font-bold text-blue-500 dark:text-cyan-400 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <PackageCheck className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                        <span>{rcpt.documentno}</span>
+                      </div>
+                      {rcpt.description && (
+                        <span className="text-[10px] text-slate-400 block truncate max-w-xs font-normal">
+                          {rcpt.description}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Doc Type */}
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                      {rcpt.doctype_name || 'Material Receipt'}
+                    </td>
+
+                    {/* Movement Date */}
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                      {rcpt.movementdate || '-'}
+                    </td>
+
+                    {/* DO Ref / SPP */}
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                      {rcpt.doreference && (
+                        <div className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">
+                          DO: {rcpt.doreference}
+                        </div>
+                      )}
+                      {rcpt.sppno && (
+                        <div className="text-[10px] text-slate-400">
+                          SPP: {rcpt.sppno}
+                        </div>
+                      )}
+                      {!rcpt.doreference && !rcpt.sppno && '-'}
+                    </td>
+
+                    {/* Warehouse */}
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <Warehouse className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                        <span className="truncate max-w-[140px]">{rcpt.warehouse_name || '-'}</span>
+                      </div>
+                    </td>
+
+                    {/* Vendor */}
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
+                      <span className="truncate max-w-[180px] block font-semibold text-slate-800 dark:text-slate-200">
+                        {rcpt.vendor_name || '-'}
+                      </span>
+                      {rcpt.creator_name && (
+                        <span className="text-[10px] text-slate-400 block">
+                          By: {rcpt.creator_name}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      {getStatusBadge(rcpt.docstatus, rcpt.docstatus_label)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

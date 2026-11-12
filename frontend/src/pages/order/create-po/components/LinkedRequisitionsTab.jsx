@@ -236,62 +236,160 @@ export default function LinkedRequisitionsTab({ orderId, isDark, onTotalCountCha
                 </div>
               </div>
 
-              {/* Collapsible lines table */}
+              {/* Collapsible lines container */}
               {isExpanded && (
-                <div className="border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/40 p-4">
-                  <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                        <tr>
-                          <th className="py-2.5 px-3 w-12 text-center">Line</th>
-                          <th className="py-2.5 px-3">Item / Description</th>
-                          <th className="py-2.5 px-3 w-28 text-right">PR Qty</th>
-                          <th className="py-2.5 px-3 w-20">UoM</th>
-                          <th className="py-2.5 px-3 w-32 text-right">Price</th>
-                          <th className="py-2.5 px-3 w-32 text-right">Net Amount</th>
-                          <th className="py-2.5 px-3 w-28 text-right">PO Line / Qty</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                        {req.lines && req.lines.length > 0 ? (
-                          req.lines.map((l) => (
-                            <tr key={l.m_requisitionline_id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                              <td className="py-2.5 px-3 text-center font-mono text-slate-400">{l.line}</td>
-                              <td className="py-2.5 px-3">
-                                <div className="font-medium text-slate-900 dark:text-slate-100">
-                                  {l.product_name || 'Generic Item'}
-                                </div>
+                <div className="border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/40 p-3 sm:p-4">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                    {/* Mobile Lines Card View (Visible only on small screens: < md) */}
+                    <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {req.lines && req.lines.length > 0 ? (
+                        req.lines.map((l, idx) => (
+                          <div
+                            key={l.m_requisitionline_id || idx}
+                            className={`p-3.5 space-y-2.5 transition-colors ${
+                              isDark ? 'bg-slate-900/40 hover:bg-slate-800/40' : 'bg-white hover:bg-slate-50/80'
+                            }`}
+                          >
+                            {/* Line Header */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="px-2 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-[10px] font-mono font-bold flex-shrink-0">
+                                  Line #{l.line || idx + 1}
+                                </span>
                                 {l.product_code && (
-                                  <span className="text-[11px] font-mono text-slate-400">{l.product_code}</span>
-                                )}
-                                {l.description && (
-                                  <div className="text-[11px] text-slate-500 italic mt-0.5">{l.description}</div>
-                                )}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-medium">{l.qty}</td>
-                              <td className="py-2.5 px-3 text-slate-500">{l.uom_symbol || l.uom_name || '-'}</td>
-                              <td className="py-2.5 px-3 text-right">{formatCurrency(l.priceactual)}</td>
-                              <td className="py-2.5 px-3 text-right font-medium">{formatCurrency(l.linenetamt)}</td>
-                              <td className="py-2.5 px-3 text-right">
-                                {l.po_line_no ? (
-                                  <span className="inline-flex items-center gap-1 font-mono text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40 px-2 py-0.5 rounded text-[11px]">
-                                    #{l.po_line_no} ({l.po_qty})
+                                  <span className="font-mono text-xs font-semibold text-slate-400 truncate">
+                                    {l.product_code}
                                   </span>
-                                ) : (
-                                  <span className="text-slate-400 text-[11px]">-</span>
                                 )}
+                              </div>
+                              {l.po_line_no && (
+                                <span className="inline-flex items-center gap-1 font-mono text-[10px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-full font-bold flex-shrink-0">
+                                  PO Line #{l.po_line_no} ({l.po_qty} {l.uom_symbol || l.uom_name || ''})
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Product Name & Description */}
+                            <div>
+                              <h5 className="text-xs font-mono font-bold text-slate-800 dark:text-slate-100 leading-snug">
+                                {l.product_name || 'Generic Item'}
+                              </h5>
+                              {l.description && (
+                                <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 italic mt-0.5">
+                                  {l.description}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Key Metrics Grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
+                              {/* PR Quantity */}
+                              <div
+                                className={`p-2 rounded-xl border flex flex-col gap-0.5 ${
+                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                  PR Qty
+                                </span>
+                                <span className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                                  {Number(l.qty || 0).toLocaleString('en-US')}{' '}
+                                  <span className="text-cyan-400 font-semibold">{l.uom_symbol || l.uom_name || ''}</span>
+                                </span>
+                              </div>
+
+                              {/* Price */}
+                              <div
+                                className={`p-2 rounded-xl border flex flex-col gap-0.5 ${
+                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                  Price
+                                </span>
+                                <span className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                                  {formatCurrency(l.priceactual)}
+                                </span>
+                              </div>
+
+                              {/* Net Amount */}
+                              <div
+                                className={`col-span-2 sm:col-span-1 p-2 rounded-xl border flex flex-col gap-0.5 ${
+                                  isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                                  Net Amount
+                                </span>
+                                <span className="font-bold text-xs text-emerald-400">
+                                  {formatCurrency(l.linenetamt)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-slate-400 text-xs font-mono">
+                          No lines found for this requisition.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Desktop / Tablet Table View (Visible only on md+ screens) */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                          <tr>
+                            <th className="py-2.5 px-3 w-12 text-center">Line</th>
+                            <th className="py-2.5 px-3">Item / Description</th>
+                            <th className="py-2.5 px-3 w-28 text-right">PR Qty</th>
+                            <th className="py-2.5 px-3 w-20">UoM</th>
+                            <th className="py-2.5 px-3 w-32 text-right">Price</th>
+                            <th className="py-2.5 px-3 w-32 text-right">Net Amount</th>
+                            <th className="py-2.5 px-3 w-28 text-right">PO Line / Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                          {req.lines && req.lines.length > 0 ? (
+                            req.lines.map((l) => (
+                              <tr key={l.m_requisitionline_id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                                <td className="py-2.5 px-3 text-center font-mono text-slate-400">{l.line}</td>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-medium text-slate-900 dark:text-slate-100">
+                                    {l.product_name || 'Generic Item'}
+                                  </div>
+                                  {l.product_code && (
+                                    <span className="text-[11px] font-mono text-slate-400">{l.product_code}</span>
+                                  )}
+                                  {l.description && (
+                                    <div className="text-[11px] text-slate-500 italic mt-0.5">{l.description}</div>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-medium">{l.qty}</td>
+                                <td className="py-2.5 px-3 text-slate-500">{l.uom_symbol || l.uom_name || '-'}</td>
+                                <td className="py-2.5 px-3 text-right">{formatCurrency(l.priceactual)}</td>
+                                <td className="py-2.5 px-3 text-right font-medium">{formatCurrency(l.linenetamt)}</td>
+                                <td className="py-2.5 px-3 text-right">
+                                  {l.po_line_no ? (
+                                    <span className="inline-flex items-center gap-1 font-mono text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40 px-2 py-0.5 rounded text-[11px]">
+                                      #{l.po_line_no} ({l.po_qty})
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 text-[11px]">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={7} className="py-4 text-center text-slate-400">
+                                No lines found for this requisition.
                               </td>
                             </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={7} className="py-4 text-center text-slate-400">
-                              No lines found for this requisition.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
