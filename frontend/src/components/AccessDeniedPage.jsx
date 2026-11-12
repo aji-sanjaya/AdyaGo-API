@@ -121,3 +121,4 @@ export default function AccessDeniedPage({ attemptedPath, roleName }) {
     </div>
   );
 }
+

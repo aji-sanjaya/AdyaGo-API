@@ -55,6 +55,7 @@ import LinkedReceiptsTab from './components/LinkedReceiptsTab';
 import OrderChatTab from './components/OrderChatTab';
 import OrderChangeLogTab from './components/OrderChangeLogTab';
 import PrintPreviewModal from './components/PrintPreviewModal';
+import InvalidDocumentState from '../../../components/common/InvalidDocumentState';
 
 const normalizeOptions = (raw) => {
   if (!raw) return {};
@@ -881,18 +882,14 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
           subtext="Authenticating record and master options from Enterprise Core"
         />
       ) : invalidToken ? (
-        <div className="p-8 text-center space-y-4">
-          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 dark:text-red-400 text-sm max-w-md mx-auto">
-            Invalid or expired document link. Please return to the purchase order list.
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/create-po')}
-            className="px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
-          >
-            Back to Purchase Order List
-          </button>
-        </div>
+        <InvalidDocumentState
+          moduleName="Purchase Order"
+          backUrl="/create-po"
+          backLabel="Back to Purchase Order List"
+          createUrl="/create-po/new"
+          createLabel="Create New PO"
+          rawToken={rawParam}
+        />
       ) : (
         <div className="space-y-6 animate-fadeIn w-full min-w-0">
           {/* Top Header / Breadcrumb */}

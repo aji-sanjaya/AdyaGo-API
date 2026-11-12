@@ -60,6 +60,7 @@ import ChatTab from './components/ChatTab';
 import ChangeLogTab from './components/ChangeLogTab';
 import OrderTab from './components/OrderTab';
 import PrintPreviewModal from './components/PrintPreviewModal';
+import InvalidDocumentState from '../../../components/common/InvalidDocumentState';
 
 export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
   const navigate = useNavigate();
@@ -1262,18 +1263,14 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
           subtext="Authenticating record and master options from Enterprise Core"
         />
       ) : invalidToken ? (
-        <div className="p-8 text-center space-y-4">
-          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 dark:text-red-400 text-sm max-w-md mx-auto">
-            Invalid or expired document link. Please return to the requisition list.
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/create-pr')}
-            className="px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
-          >
-            Back to Requisition List
-          </button>
-        </div>
+        <InvalidDocumentState
+          moduleName="Purchase Requisition"
+          backUrl="/create-pr"
+          backLabel="Back to Requisition List"
+          createUrl="/create-pr/new"
+          createLabel="Create New PR"
+          rawToken={rawParam}
+        />
       ) : (
         <div className="space-y-6 animate-fadeIn w-full min-w-0">
           {/* Top Header / Breadcrumb */}
