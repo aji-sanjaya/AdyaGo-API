@@ -7,11 +7,8 @@ import {
   RotateCw,
   ChevronLeft,
   ChevronRight,
-  Maximize2,
-  Minimize2,
   Loader2,
   AlertCircle,
-  FileText,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -237,12 +234,6 @@ export default function PdfJsViewer({
           </button>
         </div>
 
-        {/* Center: Status / PDF.js Badge */}
-        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 text-[10px] font-bold tracking-wider uppercase">
-          <FileText className="w-3 h-3" />
-          <span>PDF.js Engine</span>
-        </div>
-
         {/* Right: Zoom & Orientation Controls */}
         <div className="flex items-center gap-1.5">
           <button
@@ -315,7 +306,7 @@ export default function PdfJsViewer({
         {loading && (
           <div className="flex-1 flex flex-col items-center justify-center space-y-3 py-20 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-            <p className="text-xs font-mono">Initializing PDF.js engine & parsing pages...</p>
+            <p className="text-xs font-mono">Rendering document preview...</p>
           </div>
         )}
 
@@ -360,3 +351,4 @@ export default function PdfJsViewer({
     </div>
   );
 }
+
