@@ -7,6 +7,8 @@ import {
   RotateCw,
   ChevronLeft,
   ChevronRight,
+  Printer,
+  Download,
   Loader2,
   AlertCircle,
 } from 'lucide-react';
@@ -22,6 +24,10 @@ export default function PdfJsViewer({
   data = null,
   fileName = 'document.pdf',
   className = '',
+  showPrint = true,
+  showDownload = true,
+  onPrint = null,
+  onDownload = null,
 }) {
   const { isDark } = useTheme();
   const containerRef = useRef(null);
@@ -33,6 +39,55 @@ export default function PdfJsViewer({
   const [loading, setLoading] = useState(true);
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState(null);
+
+  const handlePrint = () => {
+    if (onPrint) {
+      onPrint();
+      return;
+    }
+    if (!url) return;
+    try {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          window.open(url, '_blank')?.print();
+        }
+        setTimeout(() => {
+          try {
+            document.body.removeChild(iframe);
+          } catch (_) {}
+        }, 3000);
+      };
+    } catch (err) {
+      console.warn('Print iframe error:', err);
+      window.open(url, '_blank')?.print();
+    }
+  };
+
+  const handleDownload = () => {
+    if (onDownload) {
+      onDownload();
+      return;
+    }
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || 'document.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   // Load PDF Document
   useEffect(() => {
@@ -285,13 +340,51 @@ export default function PdfJsViewer({
             disabled={loading}
             className={`p-1.5 rounded-lg border transition ${
               isDark
-                ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
-                : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-cyan-400'
+                : 'border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-cyan-600'
             }`}
             title="Rotate Clockwise (90°)"
           >
             <RotateCw className="w-4 h-4" />
           </button>
+
+          {(showPrint || showDownload) && (
+            <div className="h-4 w-[1px] bg-slate-700/50 mx-0.5" />
+          )}
+
+          {/* Native Print button from PDF.js tools */}
+          {showPrint && (
+            <button
+              type="button"
+              onClick={handlePrint}
+              disabled={loading || !!error}
+              className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                isDark
+                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-cyan-400'
+                  : 'border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-cyan-600'
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+              title="Print Document"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Native Download button from PDF.js tools */}
+          {showDownload && (
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={loading || !!error}
+              className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                isDark
+                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-cyan-400'
+                  : 'border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-cyan-600'
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+              title="Download PDF"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 

@@ -53,3 +53,5 @@ lerna-debug.log*
 .stylelintcache
 *.local
 
+temp.text
+

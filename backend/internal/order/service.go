@@ -246,7 +246,7 @@ func (s *Service) GetMasterOptions(clientID, orgID int, roleID int) (*MasterOpti
 	resp := &MasterOptionsResponse{
 		Organizations: []SelectOption{},
 		Warehouses:    []SelectOption{},
-		PriceLists:    []SelectOption{},
+		PriceLists:    []PriceListOption{},
 		DocTypes:      []SelectOption{},
 		Priorities:    []SelectOption{},
 		PaymentTerms:  []SelectOption{},
@@ -292,8 +292,9 @@ func (s *Service) GetMasterOptions(clientID, orgID int, roleID int) (*MasterOpti
 
 	// 3. PriceLists (Purchase)
 	plQuery := `
-		SELECT pl.m_pricelist_id AS id, pl.name AS text
+		SELECT pl.m_pricelist_id AS id, pl.name AS text, COALESCE(pl.priceprecision, cur.stdprecision, 2) AS precision
 		FROM m_pricelist pl
+		LEFT JOIN c_currency cur ON cur.c_currency_id = pl.c_currency_id
 		WHERE pl.isactive = 'Y' AND pl.ad_client_id = ? AND pl.issopricelist = 'N'
 		ORDER BY pl.name
 	`
@@ -390,6 +391,34 @@ func (s *Service) GetMasterOptions(clientID, orgID int, roleID int) (*MasterOpti
 	`
 	_ = s.db.DB.Raw(vendorQuery, clientID).Scan(&resp.Vendors).Error
 
+	// Client Name
+	var clientName string
+	clientSQL := `SELECT name FROM ad_client WHERE ad_client_id = ? LIMIT 1`
+	if err := s.db.DB.Raw(clientSQL, clientID).Scan(&clientName).Error; err == nil && clientName != "" {
+		resp.ClientName = clientName
+	}
+
+	// Client Logo from ad_clientinfo -> ad_image
+	var logoBinary []byte
+	logoSQL := `
+		SELECT img.binarydata
+		FROM ad_clientinfo ci
+		JOIN ad_image img ON img.ad_image_id = COALESCE(ci.logo_id, ci.logoreport_id, ci.logoweb_id)
+		WHERE (ci.ad_client_id = ? OR ? = 0)
+		  AND img.binarydata IS NOT NULL
+		ORDER BY CASE WHEN ci.ad_client_id = ? THEN 0 ELSE 1 END
+		LIMIT 1
+	`
+	if err := s.db.DB.Raw(logoSQL, clientID, clientID, clientID).Row().Scan(&logoBinary); err == nil && len(logoBinary) > 0 {
+		resp.LogoBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(logoBinary)
+	}
+
+	resp.AddressLines = []string{
+		"Jl. Angsana Raya Blok L6 No. 1, Delta Silicon I",
+		"Lippo Cikarang, Cikarang Selatan",
+		"Kabupaten Bekasi, 17530",
+	}
+
 	return resp, nil
 }
 
@@ -480,7 +509,8 @@ func (s *Service) GetProducts(clientID int, search string, page, limit int) ([]P
 			p.value || ' - ' || p.name AS text,
 			COALESCE(p.c_uom_id, 0) AS c_uom_id,
 			COALESCE(u.name, '') AS uom_name,
-			COALESCE(u.uomsymbol, '') AS uom_symbol
+			COALESCE(u.uomsymbol, '') AS uom_symbol,
+			COALESCE(u.stdprecision, 0) AS uom_precision
 		FROM m_product p
 		LEFT JOIN c_uom u ON u.c_uom_id = p.c_uom_id
 		WHERE p.isactive = 'Y' AND p.issummary = 'N' AND p.ad_client_id = ?
@@ -587,6 +617,7 @@ func (s *Service) GetRequisitionLines(clientID, costCenterID, orderID int, prNum
 			COALESCE(rl.c_uom_id, 0) AS c_uom_id,
 			COALESCE(uom.name, '') AS uom_name,
 			COALESCE(uom.uomsymbol, '') AS uom_symbol,
+			COALESCE(uom.stdprecision, 0) AS uom_precision,
 			rl.qty,
 			(rl.qty - COALESCE(used.ordered_qty, 0)) AS remaining_qty,
 			COALESCE(r.c_costcenter_id, 0) AS c_costcenter_id,
@@ -653,6 +684,7 @@ func (s *Service) GetRequisitionLineDetail(clientID, reqLineID int) (*Requisitio
 			COALESCE(rl.c_uom_id, 0) AS c_uom_id,
 			COALESCE(uom.name, '') AS uom_name,
 			COALESCE(uom.uomsymbol, '') AS uom_symbol,
+			COALESCE(uom.stdprecision, 0) AS uom_precision,
 			rl.qty,
 			COALESCE(rl.priceactual, 0) AS price,
 			COALESCE(rl.description, '') AS description,
@@ -713,6 +745,11 @@ func (s *Service) GetOrderDetail(orderID int) (*OrderDetailResponse, error) {
 			COALESCE(u.name, '') AS contact_name,
 			o.m_pricelist_id,
 			COALESCE(pl.name, '') AS pricelist_name,
+			COALESCE(pl.priceprecision, cur.stdprecision, 2) AS price_precision,
+			COALESCE(cur.stdprecision, 2) AS currency_precision,
+			COALESCE(cur.cursymbol, cur.iso_code, 'Rp') AS currency_symbol,
+			COALESCE(cur.iso_code, 'IDR') AS currency_code,
+			COALESCE(o.c_currency_id, pl.c_currency_id, 0) AS c_currency_id,
 			COALESCE(o.paymentrule, 'P') AS paymentrule,
 			COALESCE(o.c_paymentterm_id, 0) AS c_paymentterm_id,
 			COALESCE(pt.name, '') AS paymentterm_name,
@@ -726,18 +763,29 @@ func (s *Service) GetOrderDetail(orderID int) (*OrderDetailResponse, error) {
 			COALESCE(o.c_tax_id, 0) AS c_tax_id,
 			COALESCE(tx.name, '') AS tax_name,
 			o.adw_ad_user_checked_id,
-			COALESCE(chk.name, '') AS checkedby_name,
+			COALESCE(NULLIF(chk.description, ''), chk.name, '') AS checkedby_name,
 			o.adw_ad_user_approved_id,
-			COALESCE(appr.name, '') AS approvedby_name,
+			COALESCE(NULLIF(appr.description, ''), appr.name, '') AS approvedby_name,
+			o.created AS created_at,
+			COALESCE(NULLIF(creator.description, ''), creator.name, '') AS createdby_name,
+			o.adw_checked_date AS checked_date,
+			COALESCE(o.adw_checked_isapproved, '') AS checked_isapproved,
+			o.adw_approved_date AS approved_date,
+			COALESCE(o.adw_approve_isapproved, '') AS approved_isapproved,
 			COALESCE(o.totallines, 0) AS totallines,
 			COALESCE(o.grandtotal, 0) AS grandtotal,
-			COALESCE(o.adw_withholdingamount, o.withholdingamount, 0) AS withholdingamount
+			COALESCE(
+				NULLIF(COALESCE(o.adw_withholdingamount, o.withholdingamount, 0), 0),
+				(SELECT COALESCE(SUM(col.adw_withholdingamount), 0) FROM c_orderline col WHERE col.c_order_id = o.c_order_id),
+				0
+			) AS withholdingamount
 		FROM c_order o
 		LEFT JOIN ad_org org ON org.ad_org_id = o.ad_org_id
 		LEFT JOIN m_warehouse w ON w.m_warehouse_id = o.m_warehouse_id
 		LEFT JOIN c_bpartner cb ON cb.c_bpartner_id = o.c_bpartner_id
 		LEFT JOIN ad_user u ON u.ad_user_id = o.ad_user_id
 		LEFT JOIN m_pricelist pl ON pl.m_pricelist_id = o.m_pricelist_id
+		LEFT JOIN c_currency cur ON cur.c_currency_id = COALESCE(o.c_currency_id, pl.c_currency_id)
 		LEFT JOIN c_paymentterm pt ON pt.c_paymentterm_id = o.c_paymentterm_id
 		LEFT JOIN ad_user rep ON rep.ad_user_id = o.salesrep_id
 		LEFT JOIN c_costcenter cc ON cc.c_costcenter_id = o.c_costcenter_id
@@ -745,6 +793,7 @@ func (s *Service) GetOrderDetail(orderID int) (*OrderDetailResponse, error) {
 		LEFT JOIN c_tax tx ON tx.c_tax_id = o.c_tax_id
 		LEFT JOIN ad_user chk ON chk.ad_user_id = o.adw_ad_user_checked_id
 		LEFT JOIN ad_user appr ON appr.ad_user_id = o.adw_ad_user_approved_id
+		LEFT JOIN ad_user creator ON creator.ad_user_id = o.createdby
 		WHERE o.c_order_id = ?
 	`
 	var header OrderHeader
@@ -768,6 +817,117 @@ func (s *Service) GetOrderDetail(orderID int) (*OrderDetailResponse, error) {
 	`
 	_ = s.db.DB.Raw(wfCheckQuery, orderID).Scan(&wfCount).Error
 	header.HasActiveWorkflow = wfCount > 0
+
+	// Client Name
+	var clientName string
+	_ = s.db.DB.Raw(`
+		SELECT c.name
+		FROM c_order o
+		JOIN ad_client c ON c.ad_client_id = o.ad_client_id
+		WHERE o.c_order_id = ?
+		LIMIT 1
+	`, orderID).Scan(&clientName).Error
+	header.ClientName = clientName
+
+	// Tenant Logo from ad_clientinfo -> ad_image
+	var logoBinary []byte
+	logoSQL := `
+		SELECT img.binarydata
+		FROM c_order o
+		JOIN ad_clientinfo ci ON ci.ad_client_id = o.ad_client_id
+		JOIN ad_image img ON img.ad_image_id = COALESCE(ci.logo_id, ci.logoreport_id, ci.logoweb_id)
+		WHERE o.c_order_id = ?
+		  AND img.binarydata IS NOT NULL
+		LIMIT 1
+	`
+	if err := s.db.DB.Raw(logoSQL, orderID).Row().Scan(&logoBinary); err == nil && len(logoBinary) > 0 {
+		header.LogoBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(logoBinary)
+	} else {
+		// Fallback to active tenant logo in ad_clientinfo
+		var fallbackBinary []byte
+		fallbackSQL := `
+			SELECT img.binarydata
+			FROM ad_clientinfo ci
+			JOIN ad_image img ON img.ad_image_id = COALESCE(ci.logo_id, ci.logoreport_id, ci.logoweb_id)
+			WHERE img.binarydata IS NOT NULL
+			LIMIT 1
+		`
+		if err := s.db.DB.Raw(fallbackSQL).Row().Scan(&fallbackBinary); err == nil && len(fallbackBinary) > 0 {
+			header.LogoBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(fallbackBinary)
+		}
+	}
+
+	// Vendor details
+	var vendorInfo struct {
+		Address1 string `gorm:"column:vendor_address1"`
+		Address2 string `gorm:"column:vendor_address2"`
+		City     string `gorm:"column:vendor_city"`
+		Phone    string `gorm:"column:vendor_phone"`
+	}
+	vendorSQL := `
+		SELECT 
+			COALESCE(loc.address1, '') AS vendor_address1,
+			COALESCE(loc.address2, '') AS vendor_address2,
+			COALESCE(loc.city, '') AS vendor_city,
+			COALESCE(u.phone, '') AS vendor_phone
+		FROM c_bpartner bp
+		LEFT JOIN c_bpartner_location bpl ON bp.c_bpartner_id = bpl.c_bpartner_id AND bpl.isactive = 'Y'
+		LEFT JOIN c_location loc ON bpl.c_location_id = loc.c_location_id
+		LEFT JOIN ad_user u ON bp.c_bpartner_id = u.c_bpartner_id AND (u.ad_user_id = ? OR ? = 0)
+		WHERE bp.c_bpartner_id = ?
+		LIMIT 1
+	`
+	_ = s.db.DB.Raw(vendorSQL, header.ADUserID, header.ADUserID, header.BPartnerID).Scan(&vendorInfo).Error
+	header.VendorAddress1 = vendorInfo.Address1
+	header.VendorAddress2 = vendorInfo.Address2
+	header.VendorCity = vendorInfo.City
+	header.VendorPhone = vendorInfo.Phone
+
+	// Org / Invoice To details
+	var orgInfo struct {
+		TaxID    string `gorm:"column:org_taxid"`
+		Address1 string `gorm:"column:org_address1"`
+		Address2 string `gorm:"column:org_address2"`
+		Address3 string `gorm:"column:org_address3"`
+		City     string `gorm:"column:org_city"`
+		Postal   string `gorm:"column:org_postal"`
+	}
+	orgSQL := `
+		SELECT 
+			COALESCE(bp.taxid, '') AS org_taxid,
+			COALESCE(locbp.address1, '') AS org_address1,
+			COALESCE(locbp.address2, '') AS org_address2,
+			COALESCE(locbp.address3, '') AS org_address3,
+			COALESCE(locbp.city, '') AS org_city,
+			COALESCE(locbp.postal, '') AS org_postal
+		FROM c_bpartner bp
+		LEFT JOIN c_bpartner_location bpl ON bp.c_bpartner_id = bpl.c_bpartner_id AND bpl.isactive = 'Y'
+		LEFT JOIN c_location locbp ON bpl.c_location_id = locbp.c_location_id
+		WHERE bp.c_bpartner_id = 1000000
+		LIMIT 1
+	`
+	_ = s.db.DB.Raw(orgSQL).Scan(&orgInfo).Error
+
+	header.OrgTaxID = orgInfo.TaxID
+	header.OrgAddress1 = orgInfo.Address1
+	header.OrgAddress2 = orgInfo.Address2
+	header.OrgAddress3 = orgInfo.Address3
+	header.OrgCity = orgInfo.City
+	header.OrgPostal = orgInfo.Postal
+
+	if header.OrgAddress1 == "" {
+		header.OrgAddress1 = "Jl. Angsana Raya Blok L6 No. 1, Delta Silicon I"
+		header.OrgAddress2 = "Lippo Cikarang, Cikarang Selatan"
+		header.OrgCity = "Kabupaten Bekasi"
+		header.OrgPostal = "17530"
+	}
+
+	header.AddressLines = []string{
+		header.OrgAddress1,
+		header.OrgAddress2,
+		header.OrgAddress3,
+		strings.TrimSpace(header.OrgCity + " " + header.OrgPostal),
+	}
 
 	// Lines Query
 	lines, err := s.GetOrderLines(orderID)
@@ -802,8 +962,10 @@ func (s *Service) GetOrderLines(orderID int) ([]OrderLine, error) {
 	query := `
 		SELECT 
 			ol.c_orderline_id,
+			ol.c_orderline_id AS id,
 			ol.c_order_id,
 			ol.line,
+			ol.datepromised,
 			ol.m_product_id,
 			COALESCE(p.value, '') AS product_value,
 			COALESCE(p.name, '') AS product_name,
@@ -812,7 +974,10 @@ func (s *Service) GetOrderLines(orderID int) ([]OrderLine, error) {
 			ol.c_uom_id,
 			COALESCE(uom.name, '') AS uom_name,
 			COALESCE(uom.uomsymbol, '') AS uom_symbol,
+			COALESCE(uom.stdprecision, 0) AS uom_precision,
 			COALESCE(ol.qtyentered, ol.qtyordered, 0) AS qty,
+			COALESCE(ol.qtyordered, ol.qtyentered, 0) AS qtyordered,
+			COALESCE(ol.qtyentered, ol.qtyordered, 0) AS qtyentered,
 			COALESCE(ol.priceentered, ol.priceactual, 0) AS priceentered,
 			COALESCE(ol.priceactual, ol.priceentered, 0) AS priceactual,
 			COALESCE(ol.discount, 0) AS discount,
@@ -823,9 +988,10 @@ func (s *Service) GetOrderLines(orderID int) ([]OrderLine, error) {
 			COALESCE(ol.description, '') AS description,
 			ol.m_requisitionline_id,
 			COALESCE(r.documentno, '') AS requisition_documentno,
-			(COALESCE(ol.adw_iswithholding, 'N') = 'Y') AS is_withholding,
-			COALESCE(ol.adw_withholdingrate, 0) AS withholding_rate,
-			COALESCE(ol.adw_withholdingamount, 0) AS withholding_amount
+			(COALESCE(ol.adw_iswithholding, ol.iswithholding, 'N') = 'Y') AS is_withholding,
+			COALESCE(ol.adw_iswithholding, ol.iswithholding, 'N') AS adw_iswithholding,
+			COALESCE(ol.adw_withholdingrate, ol.withholdingrate, 0) AS withholding_rate,
+			COALESCE(ol.adw_withholdingamount, ol.withholdingamount, 0) AS withholding_amount
 		FROM c_orderline ol
 		LEFT JOIN m_product p ON p.m_product_id = ol.m_product_id
 		LEFT JOIN c_charge ch ON ch.c_charge_id = ol.c_charge_id
@@ -1070,9 +1236,6 @@ func (s *Service) CreateOrderLine(orderID int, req *CreateOrderLineRequest, clie
 		"ADW_IsWithholding":     isWithholding,
 		"ADW_WithholdingRate":   req.WithholdingRate,
 		"ADW_WithholdingAmount": withholdingAmt,
-		"adw_iswithholding":     isWithholding,
-		"adw_withholdingrate":   req.WithholdingRate,
-		"adw_withholdingamount": withholdingAmt,
 	}
 
 	if orderOrgID > 0 {
@@ -1091,16 +1254,20 @@ func (s *Service) CreateOrderLine(orderID int, req *CreateOrderLineRequest, clie
 
 	res, err := s.idempiereClient.PostModel(token, "c_orderline", payload)
 	if err != nil {
-		// Fallback retry without custom fields if iDempiere rejects custom properties
-		delete(payload, "ADW_IsWithholding")
-		delete(payload, "ADW_WithholdingRate")
-		delete(payload, "ADW_WithholdingAmount")
-		delete(payload, "adw_iswithholding")
-		delete(payload, "adw_withholdingrate")
-		delete(payload, "adw_withholdingamount")
+		log.Printf("[CreateOrderLine] Attempt 1 with string ADW_IsWithholding failed (%v), trying boolean...", err)
+		payload["ADW_IsWithholding"] = req.IsWithholding
 		res, err = s.idempiereClient.PostModel(token, "c_orderline", payload)
 		if err != nil {
-			return 0, fmt.Errorf("failed to create order line in iDempiere: %w", err)
+			log.Printf("[CreateOrderLine] Attempt 2 with boolean ADW_IsWithholding failed (%v), trying IsWithholding...", err)
+			payload["ADW_IsWithholding"] = isWithholding
+			payload["IsWithholding"] = isWithholding
+			payload["WithholdingRate"] = req.WithholdingRate
+			payload["WithholdingAmount"] = withholdingAmt
+			res, err = s.idempiereClient.PostModel(token, "c_orderline", payload)
+			if err != nil {
+				log.Printf("[CreateOrderLine] Attempt 3 failed: %v", err)
+				return 0, fmt.Errorf("failed to create order line in iDempiere: %w", err)
+			}
 		}
 	}
 
@@ -1177,9 +1344,6 @@ func (s *Service) UpdateOrderLine(orderID, lineID int, req *UpdateOrderLineReque
 		"ADW_IsWithholding":     isWithholding,
 		"ADW_WithholdingRate":   req.WithholdingRate,
 		"ADW_WithholdingAmount": withholdingAmt,
-		"adw_iswithholding":     isWithholding,
-		"adw_withholdingrate":   req.WithholdingRate,
-		"adw_withholdingamount": withholdingAmt,
 	}
 
 	if req.ChargeID != nil && *req.ChargeID > 0 {
@@ -1194,16 +1358,20 @@ func (s *Service) UpdateOrderLine(orderID, lineID int, req *UpdateOrderLineReque
 
 	_, err := s.idempiereClient.PutModel(token, "c_orderline", lineID, payload)
 	if err != nil {
-		// Fallback retry without custom fields
-		delete(payload, "ADW_IsWithholding")
-		delete(payload, "ADW_WithholdingRate")
-		delete(payload, "ADW_WithholdingAmount")
-		delete(payload, "adw_iswithholding")
-		delete(payload, "adw_withholdingrate")
-		delete(payload, "adw_withholdingamount")
+		log.Printf("[UpdateOrderLine] Attempt 1 with string ADW_IsWithholding failed (%v), trying boolean...", err)
+		payload["ADW_IsWithholding"] = req.IsWithholding
 		_, err = s.idempiereClient.PutModel(token, "c_orderline", lineID, payload)
 		if err != nil {
-			return fmt.Errorf("failed to update order line in iDempiere: %w", err)
+			log.Printf("[UpdateOrderLine] Attempt 2 with boolean ADW_IsWithholding failed (%v), trying IsWithholding...", err)
+			payload["ADW_IsWithholding"] = isWithholding
+			payload["IsWithholding"] = isWithholding
+			payload["WithholdingRate"] = req.WithholdingRate
+			payload["WithholdingAmount"] = withholdingAmt
+			_, err = s.idempiereClient.PutModel(token, "c_orderline", lineID, payload)
+			if err != nil {
+				log.Printf("[UpdateOrderLine] Attempt 3 failed: %v", err)
+				return fmt.Errorf("failed to update order line in iDempiere: %w", err)
+			}
 		}
 	}
 
@@ -1819,6 +1987,42 @@ func (s *Service) GetLinkedReceipts(orderID int) ([]LinkedReceiptItem, error) {
 
 	for i := range receipts {
 		receipts[i].DocStatusLabel = mapDocStatusLabel(receipts[i].DocStatus)
+
+		lineQuery := `
+			SELECT 
+				iol.m_inoutline_id,
+				iol.line,
+				iol.m_product_id,
+				COALESCE(p.value, '') AS product_code,
+				COALESCE(p.name, ch.name, '') AS product_name,
+				COALESCE(iol.description, '') AS description,
+				COALESCE(iol.movementqty, 0) AS movementqty,
+				COALESCE(iol.qtyentered, 0) AS qtyentered,
+				COALESCE(u.uomsymbol, '') AS uom_symbol,
+				COALESCE(u.name, '') AS uom_name,
+				COALESCE(u.stdprecision, 0) AS uom_precision,
+				COALESCE(loc.value, '') AS locator_value,
+				ol.c_orderline_id,
+				ol.line AS po_line_no,
+				ol.qtyentered AS po_qty
+			FROM m_inoutline iol
+			LEFT JOIN m_product p ON p.m_product_id = iol.m_product_id
+			LEFT JOIN c_charge ch ON ch.c_charge_id = iol.c_charge_id
+			LEFT JOIN c_uom u ON u.c_uom_id = iol.c_uom_id
+			LEFT JOIN m_locator loc ON loc.m_locator_id = iol.m_locator_id
+			LEFT JOIN c_orderline ol ON ol.c_orderline_id = iol.c_orderline_id
+			WHERE iol.m_inout_id = ?
+			ORDER BY iol.line ASC
+		`
+		var lines []LinkedReceiptLineItem
+		_ = s.db.DB.Raw(lineQuery, receipts[i].MInOutID).Scan(&lines).Error
+		receipts[i].Lines = lines
+
+		var totalQty float64
+		for _, l := range lines {
+			totalQty += l.MovementQty
+		}
+		receipts[i].TotalQty = totalQty
 	}
 
 	return receipts, nil

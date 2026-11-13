@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Printer, Download, Loader2, FileText, AlertCircle } from 'lucide-react';
+import { X, Loader2, FileText, AlertCircle } from 'lucide-react';
 import { generateRequisitionPdf } from '../../../../utils/requisitionPdfGenerator';
 import PdfJsViewer from '../../../../components/common/PdfJsViewer';
 
@@ -155,32 +155,6 @@ const PrintPreviewModal = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleDownload}
-              disabled={loading || !!error}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
-                isDark
-                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
-              }`}
-              title="Download PDF"
-            >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Download</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handlePrint}
-              disabled={loading || !!error}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-900 transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Print Voucher"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print</span>
-            </button>
-
-            <button
-              type="button"
               onClick={onClose}
               className={`p-1.5 rounded-xl border transition cursor-pointer ${
                 isDark
@@ -218,6 +192,8 @@ const PrintPreviewModal = ({
               <PdfJsViewer
                 url={pdfUrl}
                 fileName={`Purchase_Requisition_${docNo}.pdf`}
+                onPrint={handlePrint}
+                onDownload={handleDownload}
               />
               <iframe
                 ref={iframeRef}

@@ -236,15 +236,33 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
   const clientDisplayName =
     options?.client_name || session?.clientName || idempiereConfig.tenant.name;
 
+  const selectedPl =
+    options?.pricelists?.find((p) => Number(p.value || p.id) === Number(pricelistId)) || null;
+  const activePricePrecision = docHeader?.price_precision ?? selectedPl?.precision ?? 2;
+  const activeCurrencySymbol = docHeader?.currency_symbol || 'Rp';
+
   const formatCurrency = (val) => {
     const num = Number(val) || 0;
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(num);
+    return `${activeCurrencySymbol} ${num.toLocaleString('en-US', {
+      minimumFractionDigits: activePricePrecision,
+      maximumFractionDigits: activePricePrecision,
+    })}`;
   };
+
+  const withholdingTotal = Number(
+    docHeader?.withholdingamount ||
+    docHeader?.adw_withholdingamount ||
+    docLines?.reduce((sum, l) => {
+      const isWh = l.is_withholding || l.adw_iswithholding === 'Y';
+      if (!isWh) return sum;
+      const amt = Number(l.withholding_amount || l.adw_withholdingamount) || 0;
+      if (amt > 0) return sum + amt;
+      const rate = Number(l.withholding_rate || l.adw_withholdingrate || 2);
+      const lineAmt = Number(l.linenetamt) || ((Number(l.qtyentered || l.qtyordered) || 0) * (Number(l.priceactual || l.priceentered) || 0));
+      return sum + (lineAmt * rate / 100);
+    }, 0) ||
+    0
+  );
 
   const applyRecordData = (header, lines, populateForm = true) => {
     if (header) {
@@ -675,10 +693,13 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
 
   // Delete line
   const handleConfirmDeleteLine = async () => {
-    if (!targetId || !linePendingDelete?.id) return;
-    setDeletingLineId(linePendingDelete.id);
+    const lineId = linePendingDelete?.c_orderline_id || linePendingDelete?.id;
+    if (!targetId || !lineId) return;
+    setDeletingLineId(lineId);
     try {
-      await orderApi.deleteOrderLine(targetId, linePendingDelete.id, session?.token);
+      await orderApi.deleteOrderLine(targetId, lineId, session?.token);
+      setShowLineForm(false);
+      setSelectedLineForEdit(null);
       await handleLineSaved('deleted');
       setLinePendingDelete(null);
     } catch (err) {
@@ -1963,24 +1984,26 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                         </div>
                       </div>
 
-                      {/* Total Other Tax */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Total Other Tax
-                        </label>
-                        <div className="col-span-1 sm:col-span-2">
-                          <input
-                            type="text"
-                            value={formatCurrency(docHeader?.withholdingamount || docHeader?.adw_withholdingamount || 0)}
-                            readOnly
-                            className={`w-full h-[38px] px-3.5 text-xs font-mono font-medium text-right border rounded-lg cursor-not-allowed transition-colors ${
-                              isDark
-                                ? 'bg-slate-950/70 border-slate-800 text-amber-400'
-                                : 'bg-slate-50 border-slate-200 text-amber-600'
-                            }`}
-                          />
+                      {/* PPh 23 (Withholding Tax) - Shown only when withholdingTotal > 0 */}
+                      {withholdingTotal > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4 transition-all duration-200">
+                          <label className="text-left sm:text-right text-xs font-mono font-semibold text-amber-500 dark:text-amber-400">
+                            PPh 23
+                          </label>
+                          <div className="col-span-1 sm:col-span-2">
+                            <input
+                              type="text"
+                              value={`(${formatCurrency(withholdingTotal)})`}
+                              readOnly
+                              className={`w-full h-[38px] px-3.5 text-xs font-mono font-semibold text-right border rounded-lg cursor-not-allowed transition-colors ${
+                                isDark
+                                  ? 'bg-slate-950/70 border-slate-800 text-amber-400'
+                                  : 'bg-slate-50 border-slate-200 text-amber-600'
+                              }`}
+                            />
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Grand Total Amount */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
@@ -1995,8 +2018,10 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                           <input
                             type="text"
                             value={formatCurrency(
-                              (Number(docHeader?.grandtotal) || 0) -
-                                (Number(docHeader?.withholdingamount || docHeader?.adw_withholdingamount) || 0)
+                              Math.max(
+                                0,
+                                (Number(docHeader?.grandtotal) || 0) - withholdingTotal
+                              )
                             )}
                             readOnly
                             className={`w-full h-[38px] px-3.5 text-xs font-mono font-bold text-right border rounded-lg cursor-not-allowed transition-colors ${
@@ -2050,6 +2075,8 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                     costCenters={options?.costCenters || []}
                     headerTaxId={taxId}
                     taxes={options?.taxes || []}
+                    pricePrecision={activePricePrecision}
+                    currencySymbol={activeCurrencySymbol}
                     session={session}
                     isDark={isDark}
                     onCancel={() => {
@@ -2165,7 +2192,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                     ) : (
                       paginatedLines.map((line, idx) => (
                         <div
-                          key={line.id || idx}
+                          key={line.c_orderline_id || line.id || idx}
                           className={`p-4 transition-colors space-y-3 ${
                             isDark ? 'bg-slate-900/30 hover:bg-slate-900/70' : 'bg-white hover:bg-slate-50/80'
                           }`}
@@ -2249,7 +2276,10 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                                 Quantity
                               </span>
                               <span className={`font-bold text-xs ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                                {Number(line.qtyentered || line.qtyordered || 0).toLocaleString('en-US')}{' '}
+                                {Number(line.qty ?? line.qtyentered ?? line.qtyordered ?? 0).toLocaleString('en-US', {
+                                  minimumFractionDigits: line.uom_precision ?? 0,
+                                  maximumFractionDigits: line.uom_precision ?? 0,
+                                })}{' '}
                                 <span className="text-cyan-400 font-semibold">{line.uom_symbol || line.uom_name || ''}</span>
                               </span>
                             </div>
@@ -2327,7 +2357,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                         ) : paginatedLines.length > 0 ? (
                           paginatedLines.map((line, idx) => (
                             <tr
-                              key={line.id || idx}
+                              key={line.c_orderline_id || line.id || idx}
                               onClick={() => {
                                 if (!isReadOnly) {
                                   setSelectedLineForEdit(line);
@@ -2411,7 +2441,10 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                                   isDark ? 'text-slate-400' : 'text-slate-500'
                                 }`}
                               >
-                                {Number(line.qtyentered || line.qtyordered || 0).toLocaleString('en-US')}
+                                {Number(line.qty ?? line.qtyentered ?? line.qtyordered ?? 0).toLocaleString('en-US', {
+                                  minimumFractionDigits: line.uom_precision ?? 0,
+                                  maximumFractionDigits: line.uom_precision ?? 0,
+                                })}
                               </td>
                               <td
                                 className={`px-5 py-2 font-mono text-[10px] text-center ${
@@ -2432,16 +2465,16 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                                   isDark ? 'text-slate-400' : 'text-slate-500'
                                 }`}
                               >
-                                {line.discount ? `${line.discount}%` : '-'}
+                                {line.discount ? `${Number(line.discount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%` : '-'}
                               </td>
                               <td
                                 className={`px-5 py-2 font-mono text-[10px] text-center ${
                                   isDark ? 'text-slate-400' : 'text-slate-500'
                                 }`}
                               >
-                                {line.adw_iswithholding === 'Y' ? (
+                                {line.is_withholding || line.adw_iswithholding === 'Y' ? (
                                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
-                                    {line.adw_withholdingrate || 2}%
+                                    {line.withholding_rate || line.adw_withholdingrate || 2}%
                                   </span>
                                 ) : (
                                   <span className="text-slate-500">-</span>
@@ -2797,7 +2830,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
         onConfirm={handleConfirmDeleteLine}
         title="Remove Order Line Item"
         message={`Are you sure you want to delete line #${linePendingDelete?.line} (${linePendingDelete?.product_name || linePendingDelete?.charge_name || 'Item'})?`}
-        loading={deletingLineId === linePendingDelete?.id}
+        loading={deletingLineId === (linePendingDelete?.c_orderline_id || linePendingDelete?.id)}
       />
 
       {/* Preview Attachment Modal */}
@@ -3193,11 +3226,18 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       <PrintPreviewModal
         isOpen={showPrintModal}
         onClose={() => setShowPrintModal(false)}
-        order={docHeader}
+        order={{
+          ...docHeader,
+          client_name: clientDisplayName,
+          logo_base64: docHeader?.logo_base64 || options?.logo_base64,
+          address_lines: docHeader?.address_lines || options?.address_lines,
+        }}
         lines={docLines}
         options={{
-          clientName: session?.clientName || 'ADYAWINSA GROUP',
+          clientName: clientDisplayName,
           orgName: docHeader?.org_name,
+          logoBase64: docHeader?.logo_base64 || options?.logo_base64,
+          addressLines: docHeader?.address_lines || options?.address_lines,
         }}
         isDark={isDark}
       />

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Printer, Download, Loader2, FileText, AlertCircle } from 'lucide-react';
+import { X, Loader2, FileText, AlertCircle } from 'lucide-react';
 import { generateOrderPdf } from '../../../../utils/orderPdfGenerator';
 import PdfJsViewer from '../../../../components/common/PdfJsViewer';
 
@@ -132,32 +132,8 @@ export default function PrintPreviewModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handlePrint}
-              disabled={loading || !!error}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                isDark
-                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              } disabled:opacity-40 disabled:cursor-not-allowed`}
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={loading || !!error}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary-600 hover:bg-primary-700 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download PDF</span>
-            </button>
-
-            <button
-              type="button"
               onClick={onClose}
-              className={`p-1.5 rounded-lg transition-colors ml-1 ${
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                 isDark
                   ? 'text-slate-400 hover:text-white hover:bg-slate-800'
                   : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
@@ -192,6 +168,8 @@ export default function PrintPreviewModal({
               <PdfJsViewer
                 url={pdfUrl}
                 fileName={`Purchase_Order_${docNo}.pdf`}
+                onPrint={handlePrint}
+                onDownload={handleDownload}
               />
               <iframe
                 ref={iframeRef}
