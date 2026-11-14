@@ -207,20 +207,61 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    // 1. Clear all in-memory API data caches & inflight promises
     clearSidebarMenuCache();
     clearNotificationCache();
     clearMasterOptionsCache();
     clearOrderMasterOptionsCache();
-    if (session?.roleId !== undefined && session?.roleId !== null) {
-      sessionStorage.removeItem(`authorized_paths_${session.roleId}`);
+
+    // 2. Clear entire sessionStorage (authorized paths, context, root menus, tokens)
+    try {
+      sessionStorage.clear();
+    } catch (err) {
+      console.error('Failed to clear sessionStorage:', err);
     }
-    localStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(TEMP_AUTH_KEY);
+
+    // 3. Clear localStorage while preserving user's visual theme preference
+    try {
+      const currentTheme =
+        localStorage.getItem('adyago_theme') ||
+        localStorage.getItem('factoryhub_theme') ||
+        'dark';
+      localStorage.clear();
+      if (currentTheme) {
+        localStorage.setItem('adyago_theme', currentTheme);
+      }
+    } catch (err) {
+      console.error('Failed to clear localStorage:', err);
+    }
+
+    // 4. Clear browser CacheStorage API if available
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      try {
+        window.caches
+          .keys()
+          .then((names) => {
+            names.forEach((name) => window.caches.delete(name));
+          })
+          .catch(() => {});
+      } catch {}
+    }
+
+    // 5. Reset all React authentication and permission states
     setSession(null);
     setTempAuth(null);
     setAuthorizedPaths([]);
   };
+
+  // Listen for global session expiration events (e.g. from Axios 401 interceptor)
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      logout();
+    };
+    window.addEventListener('adyago:session_expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('adyago:session_expired', handleSessionExpired);
+    };
+  }, []);
 
   const prepareSwitchRole = () => {
     if (session?.credentials && session?.user) {
