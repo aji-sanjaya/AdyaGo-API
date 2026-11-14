@@ -19,6 +19,7 @@ export default function CustomDatePicker({
   iconPosition = 'right',
   inputClassName = '',
   popperPlacement = 'bottom-start',
+  portalId = 'datepicker-portal',
 }) {
   // Convert string (YYYY-MM-DD) or other inputs into Date object
   const parseDate = (val) => {
@@ -84,6 +85,7 @@ export default function CustomDatePicker({
         required={required}
         minDate={parseDate(minDate)}
         maxDate={parseDate(maxDate)}
+        portalId={portalId}
         popperPlacement={popperPlacement}
         popperProps={{ strategy: 'fixed' }}
         popperClassName="custom-datepicker-popper"

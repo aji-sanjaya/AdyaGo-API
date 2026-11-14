@@ -39,7 +39,11 @@ const getSelectStyles = (isDark) => ({
       : '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
     border: isDark ? '1px solid #1e293b' : '1px solid #e2e8f0',
     overflow: 'hidden',
-    zIndex: 50,
+    zIndex: 9999,
+  }),
+  menuPortal: (base) => ({
+    ...base,
+    zIndex: 99999,
   }),
   menuList: (base) => ({
     ...base,
@@ -304,7 +308,7 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
 
       {/* Main High-Tech Container */}
       <div
-        className={`relative backdrop-blur-2xl rounded-3xl border transition-all duration-300 p-8 sm:p-10 overflow-hidden ${isDark
+        className={`relative backdrop-blur-2xl rounded-3xl border transition-all duration-300 p-8 sm:p-10 ${isDark
           ? 'bg-slate-900/80 border-slate-800/80 shadow-[0_20px_50px_rgba(8,11,20,0.8)]'
           : 'bg-white/95 border-slate-200/90 shadow-[0_20px_50px_rgba(99,102,241,0.12)]'
           }`}
@@ -380,6 +384,9 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
               noOptionsMessage={() => "No tenants found"}
               styles={selectStyles}
               isSearchable
+              menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+              menuPosition="fixed"
+              menuPlacement="auto"
             />
           </div>
 
@@ -401,6 +408,9 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
               noOptionsMessage={() => "No roles available for this tenant"}
               styles={selectStyles}
               isSearchable
+              menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+              menuPosition="fixed"
+              menuPlacement="auto"
             />
           </div>
 
@@ -422,6 +432,9 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
               noOptionsMessage={() => "No organizations available"}
               styles={selectStyles}
               isSearchable
+              menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+              menuPosition="fixed"
+              menuPlacement="auto"
             />
           </div>
 
@@ -444,6 +457,9 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
               styles={selectStyles}
               isSearchable
               isClearable
+              menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+              menuPosition="fixed"
+              menuPlacement="auto"
             />
           </div>
           <p></p>
