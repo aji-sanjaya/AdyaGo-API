@@ -5,7 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { dashboardApi, getCachedSidebarMenus } from '../api/dashboard';
 import { notificationApi, getCachedNotifications } from '../api/notification';
 import {
-  Cpu, ArrowLeft, LayoutDashboard, ShoppingCart, TrendingUp,
+  ArrowLeft, LayoutDashboard, ShoppingCart, TrendingUp,
   Truck, Warehouse, RefreshCw, LogOut, ChevronRight, ChevronDown, Menu, X,
   Sun, Moon, Bell, User, FileText, Building2, Shield, Network,
   AlertTriangle, CheckCircle2, Info, ExternalLink, Clock, Loader2
@@ -334,9 +334,17 @@ export default function ModuleLayout({ children, pageTitle = 'Dashboard', rootMe
           <div className={`flex items-center justify-between pb-3.5 border-b ${
             isDark ? 'border-slate-800/60' : 'border-slate-200'
           }`}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-                <Cpu className="w-5 h-5 animate-pulse" />
+            <div
+              onClick={() => navigate('/home')}
+              className="flex items-center gap-3 cursor-pointer group"
+              title="Return to Portal Home"
+            >
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl overflow-hidden shadow-md shadow-indigo-500/20 flex-shrink-0 bg-white border border-slate-200/80 p-0.5 group-hover:scale-105 transition-transform">
+                <img
+                  src="/apple-touch-icon.png"
+                  alt="AdyaGo Logo"
+                  className="w-full h-full object-cover rounded-xl"
+                />
               </div>
               <div>
                 <h1 className={`text-base font-black tracking-tight leading-none ${isDark ? 'text-white' : 'text-slate-900'}`}>

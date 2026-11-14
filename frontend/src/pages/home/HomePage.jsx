@@ -7,7 +7,7 @@ import { authApi } from '../../api/auth';
 import ModuleCard from './components/ModuleCard';
 import HomeSkeleton from './components/HomeSkeleton';
 import PageLoader from '../../components/ui/PageLoader';
-import { RefreshCw, LogOut, Cpu, Sparkles } from 'lucide-react';
+import { RefreshCw, LogOut, Sparkles } from 'lucide-react';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -84,8 +84,12 @@ export default function HomePage() {
         }`}
       >
         <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 flex-shrink-0">
-            <Cpu className="w-6 h-6 animate-pulse" />
+          <div className="inline-flex items-center justify-center w-11 h-11 rounded-2xl overflow-hidden shadow-md shadow-indigo-500/20 flex-shrink-0 bg-white border border-slate-200/80 p-0.5">
+            <img
+              src="/apple-touch-icon.png"
+              alt="AdyaGo Logo"
+              className="w-full h-full object-cover rounded-xl"
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
