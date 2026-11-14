@@ -11,12 +11,18 @@ import {
   Download,
   Loader2,
   AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
-// Configure PDF.js worker via Vite's asset URL resolver
-if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+// Primary local worker (bundled by Vite or served from /pdf.worker.min.mjs)
+const LOCAL_WORKER_URL = pdfjsWorker || '/pdf.worker.min.mjs';
+// CDN fallback worker with guaranteed CORS headers & global edge caching
+const CDN_WORKER_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '6.5.438'}/pdf.worker.min.mjs`;
+
+// Set initial worker source
+if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = LOCAL_WORKER_URL;
 }
 
 export default function PdfJsViewer({
@@ -39,6 +45,7 @@ export default function PdfJsViewer({
   const [loading, setLoading] = useState(true);
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState(null);
+  const [useIframeFallback, setUseIframeFallback] = useState(false);
 
   const handlePrint = () => {
     if (onPrint) {
@@ -101,6 +108,7 @@ export default function PdfJsViewer({
 
     setLoading(true);
     setError(null);
+    setUseIframeFallback(false);
 
     const load = async () => {
       try {
@@ -115,7 +123,35 @@ export default function PdfJsViewer({
         setLoading(false);
       } catch (err) {
         if (isCancelled) return;
-        console.error('PDF.js loading error:', err);
+        console.warn('PDF.js initial load failed, attempting retry with CDN worker:', err);
+
+        // If initial load failed (e.g. worker module import failure), try CDN worker
+        if (pdfjsLib.GlobalWorkerOptions.workerSrc !== CDN_WORKER_URL) {
+          try {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = CDN_WORKER_URL;
+            const loadingParams = data ? { data } : { url };
+            loadingTask = pdfjsLib.getDocument(loadingParams);
+            const doc = await loadingTask.promise;
+
+            if (isCancelled) return;
+            setPdfDoc(doc);
+            setNumPages(doc.numPages);
+            setCurrentPage(1);
+            setLoading(false);
+            return;
+          } catch (retryErr) {
+            console.error('PDF.js CDN worker retry failed:', retryErr);
+          }
+        }
+
+        // If both workers fail and we have a valid URL, fall back to native browser PDF viewer
+        if (url) {
+          console.warn('Falling back to native browser PDF viewer');
+          setUseIframeFallback(true);
+          setLoading(false);
+          return;
+        }
+
         setError(err.message || 'Failed to load PDF document.');
         setLoading(false);
       }
@@ -158,66 +194,71 @@ export default function PdfJsViewer({
 
         await page.render(renderContext).promise;
       } catch (err) {
+        // Page rendering cancelled or aborted is benign
         if (err.name !== 'RenderingCancelledException') {
-          console.error(`Error rendering PDF page ${pageNum}:`, err);
+          console.error(`Page ${pageNum} render error:`, err);
         }
       }
     },
     [pdfDoc, scale, rotation]
   );
 
-  // Ref map for canvas elements
+  // Map to hold canvas references for all rendered pages
   const canvasRefs = useRef({});
 
+  // Render all pages when pdfDoc, scale, or rotation changes
   useEffect(() => {
-    if (!pdfDoc || numPages === 0) return;
+    if (!pdfDoc || numPages === 0 || useIframeFallback) return;
 
-    let isMounted = true;
+    let isCancelled = false;
     setRendering(true);
 
     const renderAll = async () => {
-      for (let i = 1; i <= numPages; i++) {
-        if (!isMounted) break;
-        const canvas = canvasRefs.current[i];
+      for (let p = 1; p <= numPages; p++) {
+        if (isCancelled) break;
+        const canvas = canvasRefs.current[p];
         if (canvas) {
-          await renderPage(i, canvas);
+          await renderPage(p, canvas);
         }
       }
-      if (isMounted) setRendering(false);
+      if (!isCancelled) {
+        setRendering(false);
+      }
     };
 
     renderAll();
 
     return () => {
-      isMounted = false;
+      isCancelled = true;
     };
-  }, [pdfDoc, numPages, scale, rotation, renderPage]);
+  }, [pdfDoc, numPages, scale, rotation, renderPage, useIframeFallback]);
 
-  // Handle scroll to track current page
+  // Handle page scrolling to update currentPage in header
   const handleScroll = () => {
-    if (!containerRef.current || numPages <= 1) return;
-    const container = containerRef.current;
-    const scrollPos = container.scrollTop + container.clientHeight / 3;
+    if (!containerRef.current || numPages === 0) return;
+    const containerTop = containerRef.current.scrollTop;
+    let closestPage = 1;
+    let minDistance = Infinity;
 
-    for (let i = 1; i <= numPages; i++) {
-      const canvas = canvasRefs.current[i];
-      if (canvas) {
-        const top = canvas.offsetTop;
-        const height = canvas.offsetHeight;
-        if (scrollPos >= top && scrollPos < top + height) {
-          setCurrentPage(i);
-          break;
+    for (let p = 1; p <= numPages; p++) {
+      const el = canvasRefs.current[p];
+      if (el) {
+        const offset = Math.abs(el.offsetTop - containerTop - 80);
+        if (offset < minDistance) {
+          minDistance = offset;
+          closestPage = p;
         }
       }
     }
+    setCurrentPage(closestPage);
   };
 
   const scrollToPage = (pageNum) => {
-    const target = Math.max(1, Math.min(pageNum, numPages));
-    setCurrentPage(target);
-    const canvas = canvasRefs.current[target];
-    if (canvas && containerRef.current) {
-      canvas.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (pageNum < 1 || pageNum > numPages) return;
+    const el = canvasRefs.current[pageNum];
+    if (el && containerRef.current) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setCurrentPage(pageNum);
     }
   };
 
@@ -239,114 +280,123 @@ export default function PdfJsViewer({
 
   return (
     <div
-      className={`flex flex-col w-full h-full select-none overflow-hidden ${
-        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'
+      className={`relative flex flex-col h-full w-full select-none overflow-hidden ${
+        isDark ? 'bg-slate-900/90 text-slate-200' : 'bg-slate-100 text-slate-800'
       } ${className}`}
     >
-      {/* PDF.js Viewer Toolbar */}
+      {/* Viewer Toolbar */}
       <div
-        className={`flex flex-wrap items-center justify-between px-3 sm:px-5 py-2 border-b text-xs font-mono gap-2 flex-shrink-0 z-20 ${
+        className={`flex items-center justify-between px-3 py-2 border-b text-xs z-10 select-none shadow-sm transition-colors ${
           isDark
-            ? 'bg-slate-900/90 border-slate-800 backdrop-blur-md'
-            : 'bg-white/90 border-slate-200 backdrop-blur-md shadow-sm'
+            ? 'bg-slate-900/95 border-slate-800/80'
+            : 'bg-white/95 border-slate-200'
         }`}
       >
-        {/* Left: Page Navigation */}
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => scrollToPage(currentPage - 1)}
-            disabled={currentPage <= 1 || loading}
-            className={`p-1.5 rounded-lg border transition disabled:opacity-40 disabled:cursor-not-allowed ${
-              isDark
-                ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
-                : 'border-slate-200 hover:bg-slate-100 text-slate-700'
-            }`}
-            title="Previous Page"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
+        {/* Left: Page Navigator (Hidden in iframe fallback) */}
+        {!useIframeFallback ? (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => scrollToPage(currentPage - 1)}
+              disabled={currentPage <= 1 || loading || numPages === 0}
+              className={`p-1.5 rounded-lg border transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                isDark
+                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                  : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+              }`}
+              title="Previous Page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
 
-          <div className="flex items-center gap-1 px-2 py-1 rounded-lg border bg-slate-950/20 text-[11px] font-bold">
-            <span>Page</span>
-            <span className="text-cyan-400 font-bold">{currentPage}</span>
-            <span>of</span>
-            <span>{numPages || 1}</span>
+            <span className="font-mono text-[11px] px-2 py-1 rounded bg-cyan-500/10 text-cyan-500 font-semibold border border-cyan-500/20">
+              Page {currentPage} of {numPages || 1}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => scrollToPage(currentPage + 1)}
+              disabled={currentPage >= numPages || loading || numPages === 0}
+              className={`p-1.5 rounded-lg border transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                isDark
+                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                  : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+              }`}
+              title="Next Page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-medium text-slate-400">
+              Native Browser PDF Viewer
+            </span>
+          </div>
+        )}
 
-          <button
-            type="button"
-            onClick={() => scrollToPage(currentPage + 1)}
-            disabled={currentPage >= numPages || loading}
-            className={`p-1.5 rounded-lg border transition disabled:opacity-40 disabled:cursor-not-allowed ${
-              isDark
-                ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
-                : 'border-slate-200 hover:bg-slate-100 text-slate-700'
-            }`}
-            title="Next Page"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Right: Zoom & Orientation Controls */}
+        {/* Right: Zoom, Rotate, Print, Download Tools */}
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={handleZoomOut}
-            disabled={scale <= 0.5 || loading}
-            className={`p-1.5 rounded-lg border transition disabled:opacity-40 ${
-              isDark
-                ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
-                : 'border-slate-200 hover:bg-slate-100 text-slate-700'
-            }`}
-            title="Zoom Out"
-          >
-            <ZoomOut className="w-4 h-4" />
-          </button>
+          {!useIframeFallback && (
+            <>
+              <button
+                type="button"
+                onClick={handleZoomOut}
+                disabled={scale <= 0.5 || loading}
+                className={`p-1.5 rounded-lg border transition disabled:opacity-40 ${
+                  isDark
+                    ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                }`}
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
 
-          <button
-            type="button"
-            onClick={handleResetZoom}
-            className={`px-2 py-1 rounded-lg border text-[11px] font-bold transition ${
-              isDark
-                ? 'border-slate-800 hover:bg-slate-800 text-cyan-400 bg-slate-950/40'
-                : 'border-slate-200 hover:bg-slate-100 text-cyan-600 bg-slate-50'
-            }`}
-            title="Reset Zoom to 100%"
-          >
-            {Math.round(scale * 100)}%
-          </button>
+              <button
+                type="button"
+                onClick={handleResetZoom}
+                className={`px-2 py-1 rounded-lg border text-[11px] font-bold transition ${
+                  isDark
+                    ? 'border-slate-800 hover:bg-slate-800 text-cyan-400 bg-slate-950/40'
+                    : 'border-slate-200 hover:bg-slate-100 text-cyan-600 bg-slate-50'
+                }`}
+                title="Reset Zoom to 100%"
+              >
+                {Math.round(scale * 100)}%
+              </button>
 
-          <button
-            type="button"
-            onClick={handleZoomIn}
-            disabled={scale >= 3.0 || loading}
-            className={`p-1.5 rounded-lg border transition disabled:opacity-40 ${
-              isDark
-                ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
-                : 'border-slate-200 hover:bg-slate-100 text-slate-700'
-            }`}
-            title="Zoom In"
-          >
-            <ZoomIn className="w-4 h-4" />
-          </button>
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                disabled={scale >= 3.0 || loading}
+                className={`p-1.5 rounded-lg border transition disabled:opacity-40 ${
+                  isDark
+                    ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                }`}
+                title="Zoom In"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
 
-          <div className="h-4 w-[1px] bg-slate-700/50 mx-0.5" />
+              <div className="h-4 w-[1px] bg-slate-700/50 mx-0.5" />
 
-          <button
-            type="button"
-            onClick={handleRotate}
-            disabled={loading}
-            className={`p-1.5 rounded-lg border transition ${
-              isDark
-                ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-cyan-400'
-                : 'border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-cyan-600'
-            }`}
-            title="Rotate Clockwise (90°)"
-          >
-            <RotateCw className="w-4 h-4" />
-          </button>
+              <button
+                type="button"
+                onClick={handleRotate}
+                disabled={loading}
+                className={`p-1.5 rounded-lg border transition ${
+                  isDark
+                    ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-cyan-400'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-cyan-600'
+                }`}
+                title="Rotate Clockwise (90°)"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </>
+          )}
 
           {(showPrint || showDownload) && (
             <div className="h-4 w-[1px] bg-slate-700/50 mx-0.5" />
@@ -357,7 +407,7 @@ export default function PdfJsViewer({
             <button
               type="button"
               onClick={handlePrint}
-              disabled={loading || !!error}
+              disabled={loading || (!!error && !useIframeFallback)}
               className={`p-1.5 rounded-lg border transition cursor-pointer ${
                 isDark
                   ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-cyan-400'
@@ -374,7 +424,7 @@ export default function PdfJsViewer({
             <button
               type="button"
               onClick={handleDownload}
-              disabled={loading || !!error}
+              disabled={loading || (!!error && !useIframeFallback)}
               className={`p-1.5 rounded-lg border transition cursor-pointer ${
                 isDark
                   ? 'border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-cyan-400'
@@ -403,15 +453,36 @@ export default function PdfJsViewer({
           </div>
         )}
 
-        {error && !loading && (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-md space-y-3 text-rose-400">
-            <AlertCircle className="w-10 h-10" />
-            <p className="text-sm font-bold">Failed to Render Document</p>
-            <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
+        {/* Iframe fallback when canvas rendering or workers fail */}
+        {useIframeFallback && url && (
+          <div className="w-full h-full flex-1 flex flex-col items-center min-h-[500px]">
+            <iframe
+              src={url}
+              title={fileName || 'PDF Document'}
+              className="w-full h-full flex-1 rounded-lg border border-slate-300 dark:border-slate-800 shadow-2xl bg-white"
+            />
           </div>
         )}
 
-        {!loading && !error && numPages > 0 && (
+        {error && !loading && !useIframeFallback && (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-md space-y-4 text-rose-400">
+            <AlertCircle className="w-10 h-10" />
+            <p className="text-sm font-bold">Failed to Render Document</p>
+            <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
+            {url && (
+              <button
+                type="button"
+                onClick={() => setUseIframeFallback(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white transition-all shadow-md cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                View via Built-in Browser Viewer
+              </button>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && !useIframeFallback && numPages > 0 && (
           <>
             {Array.from({ length: numPages }, (_, idx) => idx + 1).map((pageNum) => (
               <div
@@ -444,4 +515,3 @@ export default function PdfJsViewer({
     </div>
   );
 }
-

@@ -1,0 +1,39 @@
+services:
+  adyago-backend:
+    build:
+      context: ./backend
+    container_name: adyago-backend
+    env_file: .env
+    restart: unless-stopped
+    networks:
+      - caddy-proxy
+      - idempiere-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  adyago-frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: https://adyago.stampingadyawinsa.com/api/v1
+        VITE_IDEMPIERE_CLIENT_ID: "1000000"
+        VITE_IDEMPIERE_ORG_ID: "0"
+        VITE_IDEMPIERE_TENANT_NAME: PT. Adyawinsa Plastics Industry
+        VITE_IDEMPIERE_DOC_TYPE_PR_ID: "1000018"
+        VITE_IDEMPIERE_PR_DEFAULT_PRICELIST_ID: "1000208"
+    container_name: adyago-frontend
+    restart: unless-stopped
+    networks:
+      - caddy-proxy
+    depends_on:
+      - adyago-backend
+
+networks:
+  caddy-proxy:
+    external: true
+  idempiere-net:
+    external: true
+    name: idempiere13_idempiere-net
