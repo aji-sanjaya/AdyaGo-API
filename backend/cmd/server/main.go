@@ -93,12 +93,20 @@ func main() {
 
 	// API Group v1
 	v1 := r.Group("/api/v1")
+
+	// Public Auth endpoints
 	authHandler.RegisterRoutes(v1)
-	menuHandler.RegisterRoutes(v1)
-	dashHandler.RegisterRoutes(v1)
-	reqHandler.RegisterRoutes(v1)
-	orderHandler.RegisterRoutes(v1)
-	notifHandler.RegisterRoutes(v1)
+
+	// Protected ERP routes - enforced with default-deny AuthMiddleware
+	protected := v1.Group("")
+	protected.Use(security.AuthMiddleware(idempiereClient, dbInstance))
+	{
+		menuHandler.RegisterRoutes(protected)
+		dashHandler.RegisterRoutes(protected)
+		reqHandler.RegisterRoutes(protected)
+		orderHandler.RegisterRoutes(protected)
+		notifHandler.RegisterRoutes(protected)
+	}
 
 	// Graceful server startup
 	server := &http.Server{

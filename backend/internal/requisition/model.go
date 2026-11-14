@@ -11,6 +11,7 @@ type RequisitionStats struct {
 
 type RequisitionListItem struct {
 	ID             int       `json:"id" gorm:"column:id"`
+	ClientID       int       `json:"client_id" gorm:"column:ad_client_id"`
 	DocumentNo     string    `json:"documentno" gorm:"column:documentno"`
 	DateDoc        time.Time `json:"datedoc" gorm:"column:datedoc"`
 	DateRequired   time.Time `json:"daterequired" gorm:"column:daterequired"`

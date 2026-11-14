@@ -50,6 +50,7 @@ type OrderListResponse struct {
 
 type OrderHeader struct {
 	COrderID          int       `json:"c_order_id" gorm:"column:c_order_id"`
+	ClientID          int       `json:"ad_client_id" gorm:"column:ad_client_id"`
 	DocumentNo        string    `json:"documentno" gorm:"column:documentno"`
 	DocStatus         string    `json:"docstatus" gorm:"column:docstatus"`
 	DocStatusLabel    string    `json:"docstatus_label" gorm:"column:docstatus_label"`

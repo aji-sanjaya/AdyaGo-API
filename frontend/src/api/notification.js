@@ -1,12 +1,5 @@
-import axios from 'axios';
+import api from './client';
 import { idempiereConfig } from '../config/idempiere';
-
-const api = axios.create({
-  baseURL: idempiereConfig.api.baseUrl,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
 
 const NOTIF_CACHE_TTL = 60 * 1000; // 60 seconds
 let notificationCache = {

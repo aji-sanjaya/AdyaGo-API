@@ -1,12 +1,5 @@
-import axios from 'axios';
+import api, { getActiveSessionToken } from './client';
 import { idempiereConfig } from '../config/idempiere';
-
-const api = axios.create({
-  baseURL: idempiereConfig.api.baseUrl,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
 
 const inflightRequests = new Map();
 
@@ -208,7 +201,12 @@ export const orderApi = {
   },
 
   getAttachmentDownloadUrl: (id, filename, download = false) => {
-    return `${idempiereConfig.api.baseUrl}/orders/${id}/attachments/${encodeURIComponent(filename)}${download ? '?download=true' : ''}`;
+    const token = getActiveSessionToken();
+    const query = [
+      download ? 'download=true' : '',
+      token ? `token=${encodeURIComponent(token)}` : '',
+    ].filter(Boolean).join('&');
+    return `${idempiereConfig.api.baseUrl}/orders/${id}/attachments/${encodeURIComponent(filename)}${query ? `?${query}` : ''}`;
   },
 
   getChat: async (id) => {

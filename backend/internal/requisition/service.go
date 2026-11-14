@@ -202,6 +202,7 @@ func (s *Service) GetRequisitionDetail(requisitionID int) (*RequisitionDetail, e
 	headerSQL := `
 		SELECT 
 			r.m_requisition_id as id,
+			r.ad_client_id,
 			r.documentno,
 			r.datedoc,
 			r.daterequired,

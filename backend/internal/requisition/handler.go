@@ -104,6 +104,16 @@ func (h *Handler) GetRequisitionDetail(c *gin.Context) {
 		return
 	}
 
+	authClientID := c.GetInt("client_id")
+	authRoleID := c.GetInt("role_id")
+	if authClientID > 0 && authRoleID != 0 && detail.Header.ClientID > 0 && detail.Header.ClientID != authClientID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "Forbidden: Access denied to purchase requisition of another tenant.",
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    detail,
@@ -174,11 +184,10 @@ func (h *Handler) SearchProducts(c *gin.Context) {
 }
 
 func (h *Handler) extractToken(c *gin.Context) string {
-	authHeader := c.GetHeader("Authorization")
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		return strings.TrimPrefix(authHeader, "Bearer ")
+	if token := c.GetString("token"); token != "" {
+		return token
 	}
-	return c.Query("token")
+	return security.ExtractToken(c)
 }
 
 func (h *Handler) CreateRequisition(c *gin.Context) {

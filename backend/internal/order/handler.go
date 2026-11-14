@@ -64,11 +64,10 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 }
 
 func extractToken(c *gin.Context) string {
-	authHeader := c.GetHeader("Authorization")
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		return strings.TrimPrefix(authHeader, "Bearer ")
+	if token := c.GetString("token"); token != "" {
+		return token
 	}
-	return ""
+	return security.ExtractToken(c)
 }
 
 func (h *Handler) respondError(c *gin.Context, err error) {
@@ -290,6 +289,16 @@ func (h *Handler) GetOrderDetail(c *gin.Context) {
 	detail, err := h.service.GetOrderDetail(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	authClientID := c.GetInt("client_id")
+	authRoleID := c.GetInt("role_id")
+	if authClientID > 0 && authRoleID != 0 && detail.Header.ClientID > 0 && detail.Header.ClientID != authClientID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "Forbidden: Access denied to purchase order of another tenant.",
+		})
 		return
 	}
 

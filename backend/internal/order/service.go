@@ -736,6 +736,7 @@ func (s *Service) GetOrderDetail(orderID int) (*OrderDetailResponse, error) {
 	headerQuery := `
 		SELECT 
 			o.c_order_id,
+			o.ad_client_id,
 			o.documentno,
 			o.docstatus,
 			o.docaction,

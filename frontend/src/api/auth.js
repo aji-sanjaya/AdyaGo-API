@@ -1,45 +1,34 @@
-import axios from 'axios';
-import { idempiereConfig } from '../config/idempiere';
-
-const API_BASE = idempiereConfig.api.baseUrl;
-
-const apiClient = axios.create({
-  baseURL: API_BASE,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 15000,
-});
+import api from './client';
 
 export const authApi = {
   // Step 1: Initial Login
   login: async (username, password, remember = false) => {
-    const res = await apiClient.post('/auth/login', { username, password, remember });
+    const res = await api.post('/auth/login', { username, password, remember });
     return res.data;
   },
 
   // Lookup data for Context Selection
   getClients: async () => {
-    const res = await apiClient.get('/auth/clients');
+    const res = await api.get('/auth/clients');
     return res.data;
   },
 
   getRoles: async (userId, clientId) => {
-    const res = await apiClient.get('/auth/roles', {
+    const res = await api.get('/auth/roles', {
       params: { user_id: userId, client_id: clientId },
     });
     return res.data;
   },
 
   getOrgs: async (userId, clientId, roleId) => {
-    const res = await apiClient.get('/auth/orgs', {
+    const res = await api.get('/auth/orgs', {
       params: { user_id: userId, client_id: clientId, role_id: roleId },
     });
     return res.data;
   },
 
   getWarehouses: async (roleId, orgId) => {
-    const res = await apiClient.get('/auth/warehouses', {
+    const res = await api.get('/auth/warehouses', {
       params: { role_id: roleId, org_id: orgId },
     });
     return res.data;
@@ -47,7 +36,7 @@ export const authApi = {
 
   // Step 2: Final Context Login
   selectContext: async ({ username, password, clientId, roleId, orgId, warehouseId }) => {
-    const res = await apiClient.post('/auth/select-context', {
+    const res = await api.post('/auth/select-context', {
       username,
       password,
       client_id: parseInt(clientId),
@@ -60,7 +49,7 @@ export const authApi = {
 
   // Main Menu / Home items
   getWelcomeMenus: async (roleId) => {
-    const res = await apiClient.get('/menus', {
+    const res = await api.get('/menus', {
       params: { role_id: roleId },
     });
     return res.data;
@@ -68,10 +57,11 @@ export const authApi = {
 
   // Authorized Menu Paths for Permission Checking
   getAuthorizedPaths: async (roleId) => {
-    const res = await apiClient.get('/menus/authorized-paths', {
+    const res = await api.get('/menus/authorized-paths', {
       params: { role_id: roleId },
     });
     return res.data;
   },
 };
+
 

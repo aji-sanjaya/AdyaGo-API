@@ -197,3 +197,32 @@ func (c *Client) DeleteModel(token string, modelPath string, id int) error {
 	return c.DeleteEndpoint(token, fmt.Sprintf("models/%s/%d", modelPath, id))
 }
 
+// ValidateToken verifies token validity against iDempiere REST API.
+func (c *Client) ValidateToken(token string, userID int) error {
+	if token == "" {
+		return fmt.Errorf("empty token")
+	}
+
+	endpoint := "models/ad_client"
+	if userID > 0 {
+		endpoint = fmt.Sprintf("models/ad_user/%d", userID)
+	}
+	url := fmt.Sprintf("%s/%s", c.baseURL, endpoint)
+
+	req := c.client.R().
+		SetHeader("Accept", "application/json").
+		SetHeader("Authorization", "Bearer "+token)
+
+	resp, err := req.Get(url)
+	if err != nil {
+		return fmt.Errorf("iDempiere validation connection error: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("iDempiere token validation failed with status %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	return nil
+}
+
+

@@ -1,12 +1,5 @@
-import axios from 'axios';
+import api from './client';
 import { idempiereConfig } from '../config/idempiere';
-
-const api = axios.create({
-  baseURL: idempiereConfig.api.baseUrl,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
 
 const sidebarMenuCache = new Map();
 const sidebarMenuPromises = new Map();
