@@ -29,6 +29,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 		reqGroup.GET("/products", h.SearchProducts)
 		reqGroup.GET("/:id", h.GetRequisitionDetail)
 		reqGroup.GET("/:id/lines", h.GetRequisitionLines)
+		reqGroup.GET("/:id/counts", h.GetRequisitionCounts)
 		reqGroup.POST("", h.CreateRequisition)
 		reqGroup.PUT("/:id", h.UpdateRequisition)
 		reqGroup.DELETE("/:id", h.DeleteRequisition)
@@ -399,6 +400,31 @@ func (h *Handler) respondError(c *gin.Context, err error) {
 	c.JSON(status, gin.H{
 		"success": false,
 		"message": err.Error(),
+	})
+}
+
+func (h *Handler) GetRequisitionCounts(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid requisition ID.",
+		})
+		return
+	}
+
+	counts, err := h.service.GetRequisitionCounts(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    counts,
 	})
 }
 

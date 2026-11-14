@@ -62,6 +62,10 @@ export const orderApi = {
     return dedupedGet(`/orders/${id}/lines`);
   },
 
+  getOrderCounts: async (id) => {
+    return dedupedGet(`/orders/${id}/counts`);
+  },
+
   getMasterOptions: async (paramsOrClientId = {}, userIdOrForce = false, maybeToken = '') => {
     let params = {};
     let forceRefresh = false;

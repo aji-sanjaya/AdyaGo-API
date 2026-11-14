@@ -54,6 +54,7 @@ export default function RequisitionDetailModal({
 
   // Product Search
   useEffect(() => {
+    if (!isOpen) return;
     const clientId = session?.clientId || session?.client_id || 0;
     const timer = setTimeout(() => {
       requisitionApi.searchProducts({ client_id: clientId, q: productQuery })

@@ -199,6 +199,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
 
   // Attachments state
   const [attachments, setAttachments] = useState([]);
+  const [attachmentCount, setAttachmentCount] = useState(0);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState(null);
@@ -214,8 +215,10 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
   const [changeLogCount, setChangeLogCount] = useState(0);
   const [requisitionCount, setRequisitionCount] = useState(0);
   const [receiptCount, setReceiptCount] = useState(0);
+  const [lineCount, setLineCount] = useState(0);
 
-  const totalLineCount = linesLoaded ? docLines.length : (docHeader?.line_count ?? 0);
+  const totalLineCount = linesLoaded ? docLines.length : (lineCount || docHeader?.line_count || 0);
+  const totalAttachmentCount = attachments.length > 0 ? attachments.length : attachmentCount;
   const hasLines = totalLineCount > 0;
 
   const formSelectStyles = getCustomSelectStyles(isDark, {
@@ -329,14 +332,10 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
 
     const loadOptions = orderApi.getMasterOptions(clientId, userId, session?.token);
     const loadDetail = !isNew && targetId ? orderApi.getOrder(targetId) : Promise.resolve(null);
-    const loadAtts = !isNew && targetId ? orderApi.getAttachments(targetId).catch(() => ({ data: [] })) : Promise.resolve({ data: [] });
-    const loadChatData = !isNew && targetId ? orderApi.getChat(targetId).catch(() => ({ data: [] })) : Promise.resolve({ data: [] });
-    const loadLogsData = !isNew && targetId ? orderApi.getChangeLogs(targetId).catch(() => ({ data: [] })) : Promise.resolve({ data: [] });
-    const loadReqsData = !isNew && targetId ? orderApi.getLinkedRequisitions(targetId).catch(() => ({ data: [] })) : Promise.resolve({ data: [] });
-    const loadReceiptsData = !isNew && targetId ? orderApi.getLinkedReceipts(targetId).catch(() => ({ data: [] })) : Promise.resolve({ data: [] });
+    const loadCounts = !isNew && targetId ? orderApi.getOrderCounts(targetId).catch(() => ({ data: null })) : Promise.resolve({ data: null });
 
-    Promise.all([loadOptions, loadDetail, loadAtts, loadChatData, loadLogsData, loadReqsData, loadReceiptsData])
-      .then(([optRes, detailRes, attRes, chatRes, logsRes, reqsRes, receiptsRes]) => {
+    Promise.all([loadOptions, loadDetail, loadCounts])
+      .then(([optRes, detailRes, countsRes]) => {
         if (!isMounted) return;
         const optData = normalizeOptions(optRes?.data || optRes || {});
         setOptions(optData);
@@ -365,14 +364,21 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
           setTaxId((prev) => prev || optData.taxes[0].id);
         }
 
+        if (countsRes && countsRes.data) {
+          const counts = countsRes.data;
+          setAttachmentCount(counts.attachments || 0);
+          setChatCount(counts.chats || 0);
+          setChangeLogCount(counts.change_logs || 0);
+          setRequisitionCount(counts.requisitions || 0);
+          setReceiptCount(counts.receipts || 0);
+          if (counts.lines !== undefined) {
+            setLineCount(counts.lines);
+          }
+        }
+
         if (detailRes && detailRes.data) {
           applyRecordData(detailRes.data.header, detailRes.data.lines, true);
         }
-        if (attRes && attRes.data) setAttachments(attRes.data);
-        if (chatRes && chatRes.data) setChatCount(chatRes.data.length);
-        if (logsRes && logsRes.data) setChangeLogCount(logsRes.data.length);
-        if (reqsRes && reqsRes.data) setRequisitionCount(reqsRes.data.length);
-        if (receiptsRes && receiptsRes.data) setReceiptCount(receiptsRes.data.length);
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -801,8 +807,10 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
       const res = await orderApi.getAttachments(targetId);
       if (res && res.data) {
         setAttachments(res.data);
+        setAttachmentCount(res.data.length);
       } else {
         setAttachments([]);
+        setAttachmentCount(0);
       }
     } catch (err) {
       console.error('Failed to load attachments:', err);
@@ -957,7 +965,21 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
 
   // Tab change handler
   const handleTabChange = async (newTab) => {
-    if (newTab === activeTab) return;
+    if (newTab === activeTab) {
+      if (newTab === 'attachments' && !isNew && targetId) {
+        setTabLoading(true);
+        const startTime = Date.now();
+        try {
+          await loadAttachments();
+        } catch (err) {
+          console.error('Failed to reload attachments on tab click:', err);
+        } finally {
+          const elapsed = Date.now() - startTime;
+          setTimeout(() => setTabLoading(false), Math.max(0, 200 - elapsed));
+        }
+      }
+      return;
+    }
     if (newTab !== 'lines') {
       setShowLineForm(false);
       setSelectedLineForEdit(null);
@@ -1388,9 +1410,9 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                 >
                   <Paperclip className="w-4 h-4 flex-shrink-0" />
                   <span className="hidden sm:inline">Attachments</span>
-                  {!isNew && attachments.length > 0 && (
+                  {!isNew && totalAttachmentCount > 0 && (
                     <span className="px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                      {attachments.length}
+                      {totalAttachmentCount}
                     </span>
                   )}
                 </button>
@@ -2608,7 +2630,7 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                         isDark ? 'text-slate-200' : 'text-slate-800'
                       }`}
                     >
-                      Document Attachments ({attachments.length})
+                      Document Attachments ({totalAttachmentCount})
                     </h4>
                     <p
                       className={`text-[11px] font-mono mt-0.5 ${
@@ -2872,24 +2894,6 @@ export default function CreatePurchaseOrderPage({ documentIdParam: propDocId }) 
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      orderApi.downloadAttachment(
-                        targetId,
-                        fileName
-                      )
-                    }
-                    className={`p-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                    title="Download File"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Download</span>
-                  </button>
                   <button
                     type="button"
                     onClick={() => setPreviewAttachment(null)}

@@ -58,6 +58,10 @@ export const requisitionApi = {
     return dedupedGet(`/requisitions/${id}/lines`);
   },
 
+  getRequisitionCounts: async (id) => {
+    return dedupedGet(`/requisitions/${id}/counts`);
+  },
+
   getMasterOptions: async (params = {}, forceRefresh = false) => {
     const cacheKey = `${params.client_id || ''}_${params.org_id || ''}`;
     if (!forceRefresh && masterOptionsCache.has(cacheKey)) {

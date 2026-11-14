@@ -34,6 +34,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 		orderGroup.GET("/requisition-line/:id", h.GetRequisitionLineDetail)
 		orderGroup.GET("/:id", h.GetOrderDetail)
 		orderGroup.GET("/:id/lines", h.GetOrderLines)
+		orderGroup.GET("/:id/counts", h.GetOrderCounts)
 		orderGroup.POST("", h.CreateOrder)
 		orderGroup.PUT("/:id", h.UpdateOrder)
 		orderGroup.DELETE("/:id", h.DeleteOrder)
@@ -499,6 +500,28 @@ func (h *Handler) ProcessOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Document processed successfully",
+	})
+}
+
+func (h *Handler) GetOrderCounts(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid order ID.",
+		})
+		return
+	}
+
+	counts, err := h.service.GetOrderCounts(id)
+	if err != nil {
+		h.respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    counts,
 	})
 }
 

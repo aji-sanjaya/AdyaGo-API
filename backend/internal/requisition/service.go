@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"factoryhub-go/config"
@@ -17,10 +18,18 @@ import (
 	"factoryhub-go/internal/idempiere"
 )
 
+type attachmentCacheEntry struct {
+	items    []AttachmentItem
+	rawZip   []byte
+	cachedAt time.Time
+}
+
 type Service struct {
 	db              *database.DBInstance
 	idempiereClient *idempiere.Client
 	cfg             *config.Config
+	attCacheMu      sync.RWMutex
+	attCache        map[int]attachmentCacheEntry
 }
 
 func NewService(db *database.DBInstance, idempiereClient *idempiere.Client, cfg *config.Config) *Service {
@@ -28,6 +37,7 @@ func NewService(db *database.DBInstance, idempiereClient *idempiere.Client, cfg 
 		db:              db,
 		idempiereClient: idempiereClient,
 		cfg:             cfg,
+		attCache:        make(map[int]attachmentCacheEntry),
 	}
 }
 
@@ -279,6 +289,11 @@ func (s *Service) GetRequisitionDetail(requisitionID int) (*RequisitionDetail, e
 		if err := s.db.DB.Raw(fallbackSQL).Row().Scan(&fallbackBinary); err == nil && len(fallbackBinary) > 0 {
 			detail.Header.LogoBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(fallbackBinary)
 		}
+	}
+
+	lines, err := s.GetRequisitionLines(requisitionID)
+	if err == nil {
+		detail.Lines = lines
 	}
 
 	return detail, nil
@@ -841,129 +856,224 @@ func (s *Service) DeleteRequisition(token string, requisitionID int) error {
 	return nil
 }
 
+type tailReaderAt struct {
+	tail       []byte
+	totalSize  int64
+	tailOffset int64
+}
+
+func (t *tailReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
+	if off < 0 || off > t.totalSize {
+		return 0, io.EOF
+	}
+	if off < t.tailOffset {
+		return 0, fmt.Errorf("offset %d before tail offset %d", off, t.tailOffset)
+	}
+	relOff := off - t.tailOffset
+	if relOff >= int64(len(t.tail)) {
+		return 0, io.EOF
+	}
+	n = copy(p, t.tail[relOff:])
+	if n < len(p) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+func (s *Service) parseZipEntries(zr *zip.Reader, attachmentID, requisitionID int, created time.Time) []AttachmentItem {
+	var items []AttachmentItem
+	for _, f := range zr.File {
+		ext := strings.ToLower(filepath.Ext(f.Name))
+		isImg := ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp"
+		isPDF := ext == ".pdf"
+		mime := "application/octet-stream"
+		if isImg {
+			if ext == ".jpg" || ext == ".jpeg" {
+				mime = "image/jpeg"
+			} else if ext == ".png" {
+				mime = "image/png"
+			} else if ext == ".webp" {
+				mime = "image/webp"
+			} else if ext == ".gif" {
+				mime = "image/gif"
+			}
+		} else if isPDF {
+			mime = "application/pdf"
+		} else if ext == ".docx" {
+			mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+		} else if ext == ".xlsx" {
+			mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		}
+
+		items = append(items, AttachmentItem{
+			AttachmentID: attachmentID,
+			RecordID:     requisitionID,
+			FileName:     f.Name,
+			FileSize:     int64(f.UncompressedSize64),
+			MimeType:     mime,
+			IsImage:      isImg,
+			IsPDF:        isPDF,
+			CreatedAt:    created,
+			DownloadURL:  fmt.Sprintf("/api/v1/requisitions/%d/attachments/%s", requisitionID, url.PathEscape(f.Name)),
+		})
+	}
+	return items
+}
+
 func (s *Service) GetRequisitionAttachments(requisitionID int) ([]AttachmentItem, error) {
-	var atts []struct {
+	// 1. Check in-memory cache
+	s.attCacheMu.RLock()
+	entry, exists := s.attCache[requisitionID]
+	s.attCacheMu.RUnlock()
+	if exists && time.Since(entry.cachedAt) < 15*time.Minute {
+		return entry.items, nil
+	}
+
+	// 2. Query metadata and binary length first
+	var meta struct {
 		ADAttachmentID int       `gorm:"column:ad_attachment_id"`
 		RecordID       int       `gorm:"column:record_id"`
 		Created        time.Time `gorm:"column:created"`
-		BinaryData     []byte    `gorm:"column:binarydata"`
+		TotalLen       int64     `gorm:"column:total_len"`
 	}
-
-	query := `
-		SELECT ad_attachment_id, record_id, created, binarydata 
+	checkSQL := `
+		SELECT ad_attachment_id, record_id, created, COALESCE(length(binarydata), 0) as total_len
 		FROM ad_attachment 
 		WHERE ad_table_id = 702 
 		  AND record_id = ? 
 		  AND isactive = 'Y'
 		ORDER BY ad_attachment_id DESC
+		LIMIT 1
 	`
-	if err := s.db.DB.Raw(query, requisitionID).Scan(&atts).Error; err != nil {
+	if err := s.db.DB.Raw(checkSQL, requisitionID).Scan(&meta).Error; err != nil {
 		return nil, fmt.Errorf("failed to fetch attachments: %w", err)
 	}
 
-	var items []AttachmentItem
-	for _, a := range atts {
-		if len(a.BinaryData) == 0 {
-			continue
+	if meta.ADAttachmentID == 0 || meta.TotalLen == 0 {
+		s.attCacheMu.Lock()
+		s.attCache[requisitionID] = attachmentCacheEntry{
+			items:    []AttachmentItem{},
+			cachedAt: time.Now(),
 		}
-		zr, err := zip.NewReader(bytes.NewReader(a.BinaryData), int64(len(a.BinaryData)))
-		if err != nil {
-			log.Printf("[GetRequisitionAttachments] Error reading zip for attachment %d: %v", a.ADAttachmentID, err)
-			continue
-		}
-
-		for _, f := range zr.File {
-			ext := strings.ToLower(filepath.Ext(f.Name))
-			isImg := ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp"
-			isPDF := ext == ".pdf"
-			mime := "application/octet-stream"
-			if isImg {
-				if ext == ".jpg" || ext == ".jpeg" {
-					mime = "image/jpeg"
-				} else if ext == ".png" {
-					mime = "image/png"
-				} else if ext == ".webp" {
-					mime = "image/webp"
-				} else if ext == ".gif" {
-					mime = "image/gif"
-				}
-			} else if isPDF {
-				mime = "application/pdf"
-			} else if ext == ".docx" {
-				mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-			} else if ext == ".xlsx" {
-				mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-			}
-
-			items = append(items, AttachmentItem{
-				AttachmentID: a.ADAttachmentID,
-				RecordID:     a.RecordID,
-				FileName:     f.Name,
-				FileSize:     int64(f.UncompressedSize64),
-				MimeType:     mime,
-				IsImage:      isImg,
-				IsPDF:        isPDF,
-				CreatedAt:    a.Created,
-				DownloadURL:  fmt.Sprintf("/api/v1/requisitions/%d/attachments/%s", requisitionID, url.PathEscape(f.Name)),
-			})
-		}
+		s.attCacheMu.Unlock()
+		return []AttachmentItem{}, nil
 	}
+
+	// 3. Fast Tail Reading: Read only central directory at tail (last 128KB)
+	tailSize := int64(131072) // 128 KB
+	if tailSize > meta.TotalLen {
+		tailSize = meta.TotalLen
+	}
+	startPos := meta.TotalLen - tailSize + 1 // PostgreSQL substring is 1-indexed
+
+	var tailBytes []byte
+	tailSQL := `SELECT substring(binarydata from ? for ?) FROM ad_attachment WHERE ad_attachment_id = ?`
+	if err := s.db.DB.Raw(tailSQL, startPos, tailSize, meta.ADAttachmentID).Row().Scan(&tailBytes); err == nil && len(tailBytes) > 0 {
+		tr := &tailReaderAt{
+			tail:       tailBytes,
+			totalSize:  meta.TotalLen,
+			tailOffset: meta.TotalLen - int64(len(tailBytes)),
+		}
+		zr, err := zip.NewReader(tr, meta.TotalLen)
+		if err == nil {
+			items := s.parseZipEntries(zr, meta.ADAttachmentID, requisitionID, meta.Created)
+			s.attCacheMu.Lock()
+			s.attCache[requisitionID] = attachmentCacheEntry{
+				items:    items,
+				cachedAt: time.Now(),
+			}
+			s.attCacheMu.Unlock()
+			return items, nil
+		}
+		log.Printf("[GetRequisitionAttachments] Tail reader fallback for req %d (%v)", requisitionID, err)
+	}
+
+	// 4. Fallback to full download if tail reader could not parse
+	var fullBinary []byte
+	if err := s.db.DB.Raw("SELECT binarydata FROM ad_attachment WHERE ad_attachment_id = ?", meta.ADAttachmentID).Row().Scan(&fullBinary); err != nil {
+		return nil, fmt.Errorf("failed to fetch full attachment: %w", err)
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(fullBinary), int64(len(fullBinary)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read zip: %w", err)
+	}
+
+	items := s.parseZipEntries(zr, meta.ADAttachmentID, requisitionID, meta.Created)
+	s.attCacheMu.Lock()
+	s.attCache[requisitionID] = attachmentCacheEntry{
+		items:    items,
+		rawZip:   fullBinary,
+		cachedAt: time.Now(),
+	}
+	s.attCacheMu.Unlock()
 
 	return items, nil
 }
 
 func (s *Service) GetAttachmentFileContent(requisitionID int, fileName string) ([]byte, string, error) {
-	var atts []struct {
-		BinaryData []byte `gorm:"column:binarydata"`
+	s.attCacheMu.RLock()
+	entry, exists := s.attCache[requisitionID]
+	s.attCacheMu.RUnlock()
+
+	var zipBytes []byte
+	if exists && len(entry.rawZip) > 0 {
+		zipBytes = entry.rawZip
+	} else {
+		query := `
+			SELECT binarydata 
+			FROM ad_attachment 
+			WHERE ad_table_id = 702 
+			  AND record_id = ? 
+			  AND isactive = 'Y'
+			ORDER BY ad_attachment_id DESC
+			LIMIT 1
+		`
+		if err := s.db.DB.Raw(query, requisitionID).Row().Scan(&zipBytes); err != nil {
+			return nil, "", fmt.Errorf("failed to fetch attachment: %w", err)
+		}
+		s.attCacheMu.Lock()
+		if cur, ok := s.attCache[requisitionID]; ok {
+			cur.rawZip = zipBytes
+			s.attCache[requisitionID] = cur
+		}
+		s.attCacheMu.Unlock()
 	}
 
-	query := `
-		SELECT binarydata 
-		FROM ad_attachment 
-		WHERE ad_table_id = 702 
-		  AND record_id = ? 
-		  AND isactive = 'Y'
-		ORDER BY ad_attachment_id DESC
-	`
-	if err := s.db.DB.Raw(query, requisitionID).Scan(&atts).Error; err != nil {
-		return nil, "", fmt.Errorf("failed to fetch attachment: %w", err)
+	if len(zipBytes) == 0 {
+		return nil, "", fmt.Errorf("no attachment data found")
 	}
 
-	for _, a := range atts {
-		if len(a.BinaryData) == 0 {
-			continue
-		}
-		zr, err := zip.NewReader(bytes.NewReader(a.BinaryData), int64(len(a.BinaryData)))
-		if err != nil {
-			continue
-		}
+	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read zip archive: %w", err)
+	}
 
-		for _, f := range zr.File {
-			if f.Name == fileName {
-				rc, err := f.Open()
-				if err != nil {
-					return nil, "", fmt.Errorf("failed to open file in zip: %w", err)
-				}
-				defer rc.Close()
-
-				data, err := io.ReadAll(rc)
-				if err != nil {
-					return nil, "", fmt.Errorf("failed to read file in zip: %w", err)
-				}
-
-				ext := strings.ToLower(filepath.Ext(fileName))
-				mime := "application/octet-stream"
-				if ext == ".jpg" || ext == ".jpeg" {
-					mime = "image/jpeg"
-				} else if ext == ".png" {
-					mime = "image/png"
-				} else if ext == ".pdf" {
-					mime = "application/pdf"
-				} else if ext == ".webp" {
-					mime = "image/webp"
-				}
-				return data, mime, nil
+	for _, f := range zr.File {
+		if f.Name == fileName || strings.EqualFold(f.Name, fileName) {
+			rc, err := f.Open()
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to open file in zip: %w", err)
 			}
+			defer rc.Close()
+
+			data, err := io.ReadAll(rc)
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to read file in zip: %w", err)
+			}
+
+			ext := strings.ToLower(filepath.Ext(fileName))
+			mime := "application/octet-stream"
+			if ext == ".jpg" || ext == ".jpeg" {
+				mime = "image/jpeg"
+			} else if ext == ".png" {
+				mime = "image/png"
+			} else if ext == ".pdf" {
+				mime = "application/pdf"
+			} else if ext == ".webp" {
+				mime = "image/webp"
+			}
+			return data, mime, nil
 		}
 	}
 
@@ -982,6 +1092,11 @@ func (s *Service) UploadRequisitionAttachment(token string, requisitionID int, f
 		return nil, fmt.Errorf("failed to upload attachment via API Engine: %w", err)
 	}
 
+	// Invalidate cache
+	s.attCacheMu.Lock()
+	delete(s.attCache, requisitionID)
+	s.attCacheMu.Unlock()
+
 	return res, nil
 }
 
@@ -991,7 +1106,87 @@ func (s *Service) DeleteRequisitionAttachment(token string, requisitionID int, f
 	if err := s.idempiereClient.DeleteEndpoint(token, endpoint); err != nil {
 		return fmt.Errorf("failed to delete attachment via API Engine: %w", err)
 	}
+
+	// Invalidate cache
+	s.attCacheMu.Lock()
+	delete(s.attCache, requisitionID)
+	s.attCacheMu.Unlock()
+
 	return nil
+}
+
+type RequisitionCounts struct {
+	Lines       int `json:"lines"`
+	Attachments int `json:"attachments"`
+	Chats       int `json:"chats"`
+	Orders      int `json:"orders"`
+	ChangeLogs  int `json:"change_logs"`
+}
+
+func (s *Service) GetRequisitionCounts(requisitionID int) (*RequisitionCounts, error) {
+	counts := &RequisitionCounts{}
+
+	// 1. Lines count
+	_ = s.db.DB.Raw(`
+		SELECT COUNT(*) 
+		FROM m_requisitionline 
+		WHERE m_requisition_id = ? AND isactive = 'Y'
+	`, requisitionID).Scan(&counts.Lines)
+
+	// 2. Attachments count (from cache if exists, or fast check)
+	s.attCacheMu.RLock()
+	entry, hasAttCache := s.attCache[requisitionID]
+	s.attCacheMu.RUnlock()
+	if hasAttCache {
+		counts.Attachments = len(entry.items)
+	} else {
+		var attCount int
+		_ = s.db.DB.Raw(`
+			SELECT COUNT(*) 
+			FROM ad_attachment 
+			WHERE ad_table_id = 702 AND record_id = ? AND isactive = 'Y' AND COALESCE(length(binarydata), 0) > 0
+		`, requisitionID).Scan(&attCount)
+		if attCount > 0 {
+			if items, err := s.GetRequisitionAttachments(requisitionID); err == nil {
+				counts.Attachments = len(items)
+			} else {
+				counts.Attachments = attCount
+			}
+		} else {
+			counts.Attachments = 0
+		}
+	}
+
+	// 3. Chats count
+	_ = s.db.DB.Raw(`
+		SELECT COUNT(e.cm_chatentry_id)
+		FROM cm_chatentry e
+		JOIN cm_chat c ON c.cm_chat_id = e.cm_chat_id
+		WHERE c.ad_table_id = 702 AND c.record_id = ? 
+		  AND e.isactive = 'Y' AND c.isactive = 'Y'
+	`, requisitionID).Scan(&counts.Chats)
+
+	// 4. Linked Orders count
+	_ = s.db.DB.Raw(`
+		SELECT COUNT(DISTINCT o.c_order_id)
+		FROM c_order o
+		JOIN c_orderline ol ON ol.c_order_id = o.c_order_id
+		JOIN m_requisitionline rl ON rl.m_requisitionline_id = ol.m_requisitionline_id
+		WHERE rl.m_requisition_id = ? AND ol.isactive = 'Y'
+	`, requisitionID).Scan(&counts.Orders)
+
+	// 5. Change Logs count
+	_ = s.db.DB.Raw(`
+		SELECT COUNT(*)
+		FROM ad_changelog cl
+		JOIN ad_table t ON t.ad_table_id = cl.ad_table_id
+		WHERE (LOWER(t.tablename) = 'm_requisition' AND cl.record_id = ?)
+		   OR (LOWER(t.tablename) = 'm_requisitionline' AND cl.record_id IN (
+		       SELECT m_requisitionline_id FROM m_requisitionline WHERE m_requisition_id = ?
+		   ))
+	`, requisitionID, requisitionID).Scan(&counts.ChangeLogs)
+
+	return counts, nil
 }
 
 func getIDFromResult(res map[string]interface{}) int {

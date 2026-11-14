@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
@@ -9,7 +9,6 @@ import PageLoader from '../../../components/ui/PageLoader';
 import RequisitionStatsCards from './components/RequisitionStatsCards';
 import RequisitionFilterModal from './components/RequisitionFilterModal';
 import RequisitionTable from './components/RequisitionTable';
-import RequisitionDetailModal from './components/RequisitionDetailModal';
 import PrintPreviewModal from './components/PrintPreviewModal';
 import { encryptDocumentId } from '../../../utils/crypto';
 import { RefreshCw, AlertCircle } from 'lucide-react';
@@ -57,6 +56,8 @@ export default function CreatePrPage() {
   // Filters State initialized from localStorage cache
   const savedFilters = React.useMemo(() => loadSavedFilters(), []);
   const [search, setSearch] = useState(savedFilters.search || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(savedFilters.search || '');
+  const isInitialSearchMount = useRef(true);
   const [status, setStatus] = useState(savedFilters.status || '');
   const [costCenterId, setCostCenterId] = useState(savedFilters.costCenterId || '');
   const [dateStart, setDateStart] = useState(savedFilters.dateStart || '');
@@ -68,7 +69,6 @@ export default function CreatePrPage() {
 
   // Modals State
   const [filterModalOpen, setFilterModalOpen] = useState(false);
-  const [selectedDetailId, setSelectedDetailId] = useState(null);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printRequisition, setPrintRequisition] = useState(null);
   const [printLines, setPrintLines] = useState([]);
@@ -135,7 +135,7 @@ export default function CreatePrPage() {
       sort_by: sortBy,
       sort_dir: sortDir,
     };
-    if (search.trim()) params.search = search.trim();
+    if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
     if (status) params.status = status;
     if (costCenterId) params.cost_center_id = costCenterId;
     if (dateStart) params.date_start = dateStart;
@@ -159,13 +159,17 @@ export default function CreatePrPage() {
 
   useEffect(() => {
     fetchList();
-  }, [clientId, orgId, page, limit, status, costCenterId, dateStart, dateEnd, sortBy, sortDir]);
+  }, [clientId, orgId, page, limit, status, costCenterId, dateStart, dateEnd, sortBy, sortDir, debouncedSearch]);
 
   // Debounced Search
   useEffect(() => {
+    if (isInitialSearchMount.current) {
+      isInitialSearchMount.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
       setPage(1);
-      fetchList();
+      setDebouncedSearch(search);
     }, 350);
 
     return () => clearTimeout(timer);
@@ -215,6 +219,7 @@ export default function CreatePrPage() {
     setDateStart('');
     setDateEnd('');
     setSearch('');
+    setDebouncedSearch('');
     setSortBy('datedoc');
     setSortDir('desc');
     setLimit(10);
@@ -339,16 +344,6 @@ export default function CreatePrPage() {
             activeFilterCount={activeFilterCount}
             onResetFilters={handleResetFilters}
             onOpenCreate={() => navigate('/create-pr?documentID=new')}
-            isDark={isDark}
-          />
-
-          {/* Detail / Line Items Modal */}
-          <RequisitionDetailModal
-            isOpen={!!selectedDetailId}
-            requisitionId={selectedDetailId}
-            onClose={() => setSelectedDetailId(null)}
-            onUpdated={fetchList}
-            session={session}
             isDark={isDark}
           />
 

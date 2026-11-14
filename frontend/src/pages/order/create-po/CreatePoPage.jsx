@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
@@ -56,6 +56,8 @@ export default function CreatePoPage() {
   // Filters State initialized from localStorage cache
   const savedFilters = useMemo(() => loadSavedFilters(), []);
   const [search, setSearch] = useState(savedFilters.search || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(savedFilters.search || '');
+  const isInitialSearchMount = useRef(true);
   const [description, setDescription] = useState(savedFilters.description || '');
   const [bpartnerId, setBpartnerId] = useState(savedFilters.bpartnerId || '');
   const [costCenterId, setCostCenterId] = useState(savedFilters.costCenterId || '');
@@ -129,7 +131,7 @@ export default function CreatePoPage() {
       sort_by: sortBy,
       sort_dir: sortDir,
     };
-    if (search.trim()) params.search = search.trim();
+    if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
     if (description.trim()) params.description = description.trim();
     if (bpartnerId) params.c_bpartner_id = bpartnerId;
     if (createdBy) params.created_by = createdBy;
@@ -157,13 +159,17 @@ export default function CreatePoPage() {
 
   useEffect(() => {
     fetchList();
-  }, [clientId, orgId, page, limit, status, costCenterId, bpartnerId, createdBy, description, dateStart, dateEnd, sortBy, sortDir]);
+  }, [clientId, orgId, page, limit, status, costCenterId, bpartnerId, createdBy, description, dateStart, dateEnd, sortBy, sortDir, debouncedSearch]);
 
   // Debounced Search
   useEffect(() => {
+    if (isInitialSearchMount.current) {
+      isInitialSearchMount.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
       setPage(1);
-      fetchList();
+      setDebouncedSearch(search);
     }, 350);
 
     return () => clearTimeout(timer);
@@ -222,6 +228,7 @@ export default function CreatePoPage() {
     setDateStart('');
     setDateEnd('');
     setSearch('');
+    setDebouncedSearch('');
     setSortBy('dateordered');
     setSortDir('desc');
     setLimit(10);

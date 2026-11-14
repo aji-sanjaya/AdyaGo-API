@@ -55,7 +55,7 @@ import CustomDatePicker from '../../../components/ui/CustomDatePicker';
 import { decryptDocumentId } from '../../../utils/crypto';
 import ReauthModal from '../../../components/common/ReauthModal';
 import ConfirmDeleteModal from '../../../components/common/ConfirmDeleteModal';
-import AddLineModal from './components/AddLineModal';
+import RequisitionLineForm from './components/RequisitionLineForm';
 import UploadLinesModal from './components/UploadLinesModal';
 import ChatTab from './components/ChatTab';
 import ChangeLogTab from './components/ChangeLogTab';
@@ -130,13 +130,14 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
   const [successMessage, setSuccessMessage] = useState(null);
   const [showReauthModal, setShowReauthModal] = useState(false);
   const [tabLoading, setTabLoading] = useState(false);
-  const [showAddLineModal, setShowAddLineModal] = useState(false);
+  const [showLineForm, setShowLineForm] = useState(false);
   const [selectedLineForEdit, setSelectedLineForEdit] = useState(null);
   const [deletingLineId, setDeletingLineId] = useState(null);
   const [linePendingDelete, setLinePendingDelete] = useState(null);
 
   // Attachments state
   const [attachments, setAttachments] = useState([]);
+  const [attachmentCount, setAttachmentCount] = useState(0);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState(null);
@@ -148,7 +149,10 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
   const [chatCount, setChatCount] = useState(0);
   const [changeLogCount, setChangeLogCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
-  const totalLineCount = linesLoaded ? docLines.length : (docHeader?.line_count ?? 0);
+  const [lineCount, setLineCount] = useState(0);
+
+  const totalLineCount = linesLoaded ? docLines.length : (lineCount || docHeader?.line_count || 0);
+  const totalAttachmentCount = attachments.length > 0 ? attachments.length : attachmentCount;
   const fileInputRef = React.useRef(null);
   const lineFileInputRef = React.useRef(null);
 
@@ -333,6 +337,8 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
     setDeletingLineId(linePendingDelete.id);
     try {
       await requisitionApi.deleteRequisitionLine(targetId, linePendingDelete.id, session?.token);
+      setShowLineForm(false);
+      setSelectedLineForEdit(null);
       await handleLineSaved('deleted');
       setLinePendingDelete(null);
     } catch (err) {
@@ -541,10 +547,16 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
       setShowDocActionModal(false);
       setActionPendingConfirm(null);
 
-      // Refresh document details
-      const detailRes = await requisitionApi.getRequisitionDetail(targetId);
+      // Refresh document details & lines
+      const [detailRes, linesRes] = await Promise.all([
+        requisitionApi.getRequisitionDetail(targetId),
+        requisitionApi.getRequisitionLines(targetId),
+      ]);
       if (detailRes && detailRes.data) {
-        const { header, lines } = detailRes.data;
+        const header = detailRes.data.header || detailRes.data;
+        const lines = (linesRes && linesRes.data && linesRes.data.length > 0)
+          ? linesRes.data
+          : (detailRes.data.lines || []);
         applyRecordData(header, lines, true);
       }
     } catch (err) {
@@ -654,8 +666,10 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
       const res = await requisitionApi.getAttachments(targetId);
       if (res && res.data) {
         setAttachments(res.data);
+        setAttachmentCount(res.data.length);
       } else {
         setAttachments([]);
+        setAttachmentCount(0);
       }
     } catch (err) {
       console.error('Failed to load attachments:', err);
@@ -824,21 +838,55 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
   }, [previewAttachment, targetId]);
 
   const handleTabChange = async (newTab) => {
-    if (newTab === activeTab) return;
+    if (newTab === activeTab) {
+      if (newTab === 'lines' && !isNew && targetId) {
+        setShowLineForm(false);
+        setSelectedLineForEdit(null);
+        setTabLoading(true);
+        const startTime = Date.now();
+        try {
+          await loadLines(true);
+        } catch (err) {
+          console.error('Failed to reload lines on tab click:', err);
+        } finally {
+          const elapsed = Date.now() - startTime;
+          setTimeout(() => setTabLoading(false), Math.max(0, 350 - elapsed));
+        }
+      } else if (newTab === 'attachments' && !isNew && targetId) {
+        setTabLoading(true);
+        const startTime = Date.now();
+        try {
+          await loadAttachments();
+        } catch (err) {
+          console.error('Failed to reload attachments on tab click:', err);
+        } finally {
+          const elapsed = Date.now() - startTime;
+          setTimeout(() => setTabLoading(false), Math.max(0, 200 - elapsed));
+        }
+      }
+      return;
+    }
+
+    if (newTab !== 'lines') {
+      setShowLineForm(false);
+      setSelectedLineForEdit(null);
+    }
     setActiveTab(newTab);
 
     // Refresh record data from backend when switching tabs (only for inline tabs)
     if (!isNew && targetId) {
       if (newTab === 'lines') {
+        setShowLineForm(false);
+        setSelectedLineForEdit(null);
         setTabLoading(true);
         const startTime = Date.now();
         try {
-          await loadLines();
+          await loadLines(true);
         } catch (err) {
           console.error('Failed to retrieve lines on tab switch:', err);
         } finally {
           const elapsed = Date.now() - startTime;
-          setTimeout(() => setTabLoading(false), Math.max(0, 200 - elapsed));
+          setTimeout(() => setTabLoading(false), Math.max(0, 350 - elapsed));
         }
       } else if (newTab === 'attachments') {
         setTabLoading(true);
@@ -894,51 +942,32 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
         ? requisitionApi.getRequisitionDetail(targetId)
         : Promise.resolve(null);
 
-    const loadAtts =
+    const loadCounts =
       !isNew && targetId
-        ? requisitionApi.getAttachments(targetId).catch(() => ({ data: [] }))
-        : Promise.resolve({ data: [] });
+        ? requisitionApi.getRequisitionCounts(targetId).catch(() => ({ data: null }))
+        : Promise.resolve({ data: null });
 
-    const loadChatData =
-      !isNew && targetId
-        ? requisitionApi.getChat(targetId).catch(() => ({ data: [] }))
-        : Promise.resolve({ data: [] });
-
-    const loadLogsData =
-      !isNew && targetId
-        ? requisitionApi.getChangeLogs(targetId).catch(() => ({ data: [] }))
-        : Promise.resolve({ data: [] });
-
-    const loadOrdersData =
-      !isNew && targetId
-        ? requisitionApi.getOrders(targetId).catch(() => ({ data: [] }))
-        : Promise.resolve({ data: [] });
-
-    Promise.all([loadOptions, loadDetail, loadAtts, loadChatData, loadLogsData, loadOrdersData])
-      .then(([optRes, detailRes, attRes, chatRes, logsRes, ordersRes]) => {
+    Promise.all([loadOptions, loadDetail, loadCounts])
+      .then(([optRes, detailRes, countsRes]) => {
         if (!isMounted) return;
         const optData = optRes.data || {};
         setOptions(optData);
 
-        if (attRes && attRes.data) {
-          setAttachments(attRes.data);
-        }
-
-        if (chatRes && chatRes.data) {
-          setChatCount(chatRes.data.length);
-        }
-
-        if (logsRes && logsRes.data) {
-          setChangeLogCount(logsRes.data.length);
-        }
-
-        if (ordersRes && ordersRes.data) {
-          setOrderCount(ordersRes.data.length);
+        if (countsRes && countsRes.data) {
+          const counts = countsRes.data;
+          setAttachmentCount(counts.attachments || 0);
+          setChatCount(counts.chats || 0);
+          setChangeLogCount(counts.change_logs || 0);
+          setOrderCount(counts.orders || 0);
+          if (counts.lines !== undefined) {
+            setLineCount(counts.lines);
+          }
         }
 
         if (detailRes && detailRes.data) {
-          const { header } = detailRes.data;
-          applyRecordData(header, null, true);
+          const header = detailRes.data.header || detailRes.data;
+          const lines = detailRes.data.lines || [];
+          applyRecordData(header, lines, true);
         } else {
           // Defaults for new record: set default according to active context
           if (optData.organizations?.length > 0) {
@@ -1501,9 +1530,9 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                 >
                   <Paperclip className="w-4 h-4 flex-shrink-0" />
                   <span className="hidden sm:inline">Attachments</span>
-                  {!isNew && attachments.length > 0 && (
+                  {!isNew && totalAttachmentCount > 0 && (
                     <span className="px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                      {attachments.length}
+                      {totalAttachmentCount}
                     </span>
                   )}
                 </button>
@@ -1974,70 +2003,91 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
             {/* Tab Content: Lines Tab */}
             {activeTab === 'lines' && (
               <div className="p-6 sm:p-8 space-y-5 w-full">
-                {/* Lines Action Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center flex-shrink-0">
-                      <List className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3
-                        className={`text-sm sm:text-base font-bold tracking-tight font-mono ${
-                          isDark ? 'text-white' : 'text-slate-900'
-                        }`}
-                      >
-                        Requisition Line Items ({totalLineCount})
-                      </h3>
-                    </div>
-                  </div>
+                {showLineForm ? (
+                  <RequisitionLineForm
+                    isEdit={Boolean(selectedLineForEdit)}
+                    lineData={selectedLineForEdit}
+                    requisitionId={Number(targetId)}
+                    pricePrecision={activePricePrecision}
+                    session={session}
+                    isDark={isDark}
+                    onCancel={() => {
+                      setShowLineForm(false);
+                      setSelectedLineForEdit(null);
+                      loadLines(true);
+                    }}
+                    onSuccess={(mode) => {
+                      setShowLineForm(false);
+                      setSelectedLineForEdit(null);
+                      handleLineSaved(mode);
+                    }}
+                  />
+                ) : (
+                  <>
+                    {/* Lines Action Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center flex-shrink-0">
+                          <List className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3
+                            className={`text-sm sm:text-base font-bold tracking-tight font-mono ${
+                              isDark ? 'text-white' : 'text-slate-900'
+                            }`}
+                          >
+                            Requisition Line Items ({totalLineCount})
+                          </h3>
+                        </div>
+                      </div>
 
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
-                    {/* Search Box to the left of Add Line button */}
-                    <div className="relative w-full sm:w-64">
-                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        value={lineSearch}
-                        onChange={(e) => {
-                          setLineSearch(e.target.value);
-                          setLinePage(1);
-                        }}
-                        placeholder="Search lines..."
-                        className={`w-full h-[38px] pl-9 pr-7 rounded-xl text-xs font-mono border outline-none transition ${
-                          isDark
-                            ? 'bg-slate-950/70 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/60'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500'
-                        }`}
-                      />
-                      {lineSearch && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLineSearch('');
-                            setLinePage(1);
-                          }}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+                        {/* Search Box to the left of Add Line button */}
+                        <div className="relative w-full sm:w-64">
+                          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={lineSearch}
+                            onChange={(e) => {
+                              setLineSearch(e.target.value);
+                              setLinePage(1);
+                            }}
+                            placeholder="Search lines..."
+                            className={`w-full h-[38px] pl-9 pr-7 rounded-xl text-xs font-mono border outline-none transition ${
+                              isDark
+                                ? 'bg-slate-950/70 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/60'
+                                : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500'
+                            }`}
+                          />
+                          {lineSearch && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLineSearch('');
+                                setLinePage(1);
+                              }}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
 
-                    {!isReadOnly && !isNew && (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {/* Add Line Action (Icon Only) */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedLineForEdit(null);
-                            setShowAddLineModal(true);
-                          }}
-                          title="Add Line Item"
-                          aria-label="Add Line Item"
-                          className="h-[38px] w-[38px] rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white shadow-md shadow-indigo-500/20 transition cursor-pointer flex items-center justify-center flex-shrink-0"
-                        >
-                          <Plus className="w-4 h-4 flex-shrink-0" />
-                        </button>
+                        {!isReadOnly && !isNew && (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* Add Line Action (Icon Only) */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedLineForEdit(null);
+                                setShowLineForm(true);
+                              }}
+                              title="Add Line Item"
+                              aria-label="Add Line Item"
+                              className="h-[38px] w-[38px] rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white shadow-md shadow-indigo-500/20 transition cursor-pointer flex items-center justify-center flex-shrink-0"
+                            >
+                              <Plus className="w-4 h-4 flex-shrink-0" />
+                            </button>
 
                         {/* Upload Lines Action (Opens Large Import Modal) */}
                         <button
@@ -2187,7 +2237,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                                 onClick={() => {
                                   if (!isReadOnly) {
                                     setSelectedLineForEdit(line);
-                                    setShowAddLineModal(true);
+                                    setShowLineForm(true);
                                   }
                                 }}
                                 className={`text-xs sm:text-sm font-mono font-bold leading-tight ${
@@ -2287,7 +2337,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                                   type="button"
                                   onClick={() => {
                                     setSelectedLineForEdit(line);
-                                    setShowAddLineModal(true);
+                                    setShowLineForm(true);
                                   }}
                                   className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-cyan-400 text-xs font-mono font-bold transition active:scale-[0.99] cursor-pointer"
                                 >
@@ -2416,7 +2466,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                               onClick={() => {
                                 if (!isReadOnly) {
                                   setSelectedLineForEdit(line);
-                                  setShowAddLineModal(true);
+                                  setShowLineForm(true);
                                 }
                               }}
                               title={!isReadOnly ? 'Click to edit line' : undefined}
@@ -2498,25 +2548,42 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {!isReadOnly && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteLine(line)}
-                                    disabled={deletingLineId === line.id || line.is_po_linked}
-                                    className={`p-1.5 rounded-lg border transition ${
-                                      line.is_po_linked
-                                        ? 'opacity-40 cursor-not-allowed border-slate-700/60 text-slate-500'
-                                        : isDark
-                                        ? 'cursor-pointer border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10'
-                                        : 'cursor-pointer border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50'
-                                    }`}
-                                    title={line.is_po_linked ? 'Cannot delete line linked to Purchase Order' : 'Delete line item'}
-                                  >
-                                    {deletingLineId === line.id ? (
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
-                                    ) : (
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    )}
-                                  </button>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedLineForEdit(line);
+                                        setShowLineForm(true);
+                                      }}
+                                      className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                                        isDark
+                                          ? 'bg-slate-800 hover:bg-slate-700 text-cyan-400 border-slate-700'
+                                          : 'bg-white hover:bg-slate-100 text-indigo-600 border-slate-200 shadow-xs'
+                                      }`}
+                                      title="Edit Line"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteLine(line)}
+                                      disabled={deletingLineId === line.id || line.is_po_linked}
+                                      className={`p-1.5 rounded-lg border transition ${
+                                        line.is_po_linked
+                                          ? 'opacity-40 cursor-not-allowed border-slate-700/60 text-slate-500'
+                                          : isDark
+                                          ? 'cursor-pointer border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10'
+                                          : 'cursor-pointer border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50'
+                                      }`}
+                                      title={line.is_po_linked ? 'Cannot delete line linked to Purchase Order' : 'Delete line item'}
+                                    >
+                                      {deletingLineId === line.id ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                                      ) : (
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                  </div>
                                 )}
                               </td>
                             </tr>
@@ -2661,6 +2728,8 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                     </div>
                   </div>
                 </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -2680,7 +2749,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                         isDark ? 'text-slate-200' : 'text-slate-800'
                       }`}
                     >
-                      Document Attachments ({attachments.length})
+                      Document Attachments ({totalAttachmentCount})
                     </h4>
                     <p
                       className={`text-[11px] font-mono mt-0.5 ${
@@ -2911,21 +2980,6 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
         onSuccess={handleReauthSuccess}
       />
 
-      {/* Add / Edit Requisition Line Modal */}
-      <AddLineModal
-        isOpen={showAddLineModal}
-        onClose={() => {
-          setShowAddLineModal(false);
-          setSelectedLineForEdit(null);
-        }}
-        requisitionId={Number(targetId)}
-        lineData={selectedLineForEdit}
-        pricePrecision={activePricePrecision}
-        onSuccess={handleLineSaved}
-        session={session}
-        isDark={isDark}
-      />
-
       {/* Upload Requisition Lines Large Modal */}
       <UploadLinesModal
         isOpen={showUploadLinesModal}
@@ -3022,39 +3076,6 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <a
-                    href={requisitionApi.getAttachmentDownloadUrl(
-                      targetId,
-                      fileName,
-                      false
-                    )}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Open in new window"
-                    className={`p-1.5 rounded-lg border transition ${
-                      isDark
-                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                  <a
-                    href={requisitionApi.getAttachmentDownloadUrl(
-                      targetId,
-                      fileName,
-                      true
-                    )}
-                    download={fileName}
-                    title="Download file"
-                    className={`p-1.5 rounded-lg border transition ${
-                      isDark
-                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Download className="w-4 h-4" />
-                  </a>
                   <button
                     type="button"
                     onClick={() => setPreviewAttachment(null)}
