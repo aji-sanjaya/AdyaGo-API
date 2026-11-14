@@ -7,8 +7,8 @@ export default function ThemeToggle({ inline = false }) {
   const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
 
-  // If not inline and on /home or module dashboard pages, don't show the fixed floating button (header has it)
-  if (!inline && (location.pathname === '/home' || location.pathname.includes('-dashboard'))) {
+  // If not inline and on /home, /login, or module dashboard pages, don't show the fixed floating button (card or header has it)
+  if (!inline && (location.pathname === '/home' || location.pathname === '/login' || location.pathname === '/' || location.pathname === '/select-role' || location.pathname.includes('-dashboard'))) {
     return null;
   }
 

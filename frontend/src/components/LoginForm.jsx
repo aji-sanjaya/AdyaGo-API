@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  User, Lock, Eye, EyeOff, ArrowRight, AlertCircle, 
-  Clock, Cpu, Radio 
+import {
+  User, Lock, Eye, EyeOff, ArrowRight, AlertCircle,
+  Clock, Sun, Moon
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, lockoutSeconds, onLockoutExpire }) {
-  const { isDark } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
@@ -58,23 +58,20 @@ export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, 
     <div className="relative w-full max-w-md">
       {/* High-Tech Glowing Aura / Ambient Lighting */}
       <div
-        className={`absolute -top-10 -left-10 w-64 h-64 rounded-full blur-3xl pointer-events-none -z-10 animate-pulse ${
-          isDark ? 'bg-indigo-500/20' : 'bg-indigo-500/15'
-        }`}
+        className={`absolute -top-10 -left-10 w-64 h-64 rounded-full blur-3xl pointer-events-none -z-10 animate-pulse ${isDark ? 'bg-indigo-500/20' : 'bg-indigo-500/15'
+          }`}
       />
       <div
-        className={`absolute -bottom-10 -right-10 w-64 h-64 rounded-full blur-3xl pointer-events-none -z-10 ${
-          isDark ? 'bg-cyan-500/15' : 'bg-cyan-400/15'
-        }`}
+        className={`absolute -bottom-10 -right-10 w-64 h-64 rounded-full blur-3xl pointer-events-none -z-10 ${isDark ? 'bg-cyan-500/15' : 'bg-cyan-400/15'
+          }`}
       />
 
       {/* Main Glassmorphism High-Tech Card */}
       <div
-        className={`relative backdrop-blur-2xl rounded-3xl border transition-all duration-300 p-8 sm:p-10 overflow-hidden ${
-          isDark
-            ? 'bg-slate-900/80 border-slate-800/80 shadow-[0_20px_50px_rgba(8,11,20,0.8)]'
-            : 'bg-white/95 border-slate-200/90 shadow-[0_20px_50px_rgba(99,102,241,0.12)]'
-        }`}
+        className={`relative backdrop-blur-2xl rounded-3xl border transition-all duration-300 p-8 sm:p-10 overflow-hidden ${isDark
+          ? 'bg-slate-900/80 border-slate-800/80 shadow-[0_20px_50px_rgba(8,11,20,0.8)]'
+          : 'bg-white/95 border-slate-200/90 shadow-[0_20px_50px_rgba(99,102,241,0.12)]'
+          }`}
       >
         {/* Futuristic HUD Corner Brackets */}
         <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-indigo-500 rounded-tl-xl pointer-events-none" />
@@ -85,50 +82,66 @@ export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, 
         {/* Top Status & System Badge */}
         <div className="flex items-center justify-between mb-8">
           <div
-            className={`flex items-center gap-2 px-3 py-1 rounded-full border text-[11px] font-mono transition-colors ${
-              isDark
-                ? 'bg-slate-800/80 border-slate-700/60 text-cyan-400'
-                : 'bg-indigo-50/80 border-indigo-200/80 text-indigo-700 font-semibold'
-            }`}
+            className={`flex items-center gap-2 px-3 py-1 rounded-full border text-[11px] font-mono transition-colors ${isDark
+              ? 'bg-slate-800/80 border-slate-700/60 text-cyan-400'
+              : 'bg-indigo-50/80 border-indigo-200/80 text-indigo-700 font-semibold'
+              }`}
           >
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
             <span>CORE NODE ONLINE</span>
           </div>
-          <div
-            className={`text-[11px] font-mono flex items-center gap-1 ${
-              isDark ? 'text-slate-500' : 'text-slate-400 font-medium'
-            }`}
+
+          {/* Theme Mode Toggle Button */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label="Toggle theme mode"
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-mono font-medium transition-all duration-200 cursor-pointer shadow-sm ${isDark
+              ? 'bg-slate-800/80 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-500 hover:bg-slate-700/70'
+              : 'bg-slate-100/90 border-slate-200 text-slate-700 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-200/80'
+              }`}
           >
-            <Radio className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
-            <span>v2.5 // SECURE</span>
-          </div>
+            <div className="relative w-3.5 h-3.5 flex items-center justify-center">
+              {isDark ? (
+                <Sun className="w-3.5 h-3.5 text-amber-400 transition-transform duration-300 rotate-0 hover:rotate-90" />
+              ) : (
+                <Moon className="w-3.5 h-3.5 text-indigo-600 transition-transform duration-300 -rotate-12 hover:rotate-0" />
+              )}
+            </div>
+            <span>{isDark ? 'LIGHT' : 'DARK'}</span>
+          </button>
         </div>
 
         {/* Brand Title */}
-        <div className="mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white shadow-lg shadow-indigo-500/30 mb-4">
-            <Cpu className="w-6 h-6 animate-pulse" />
+        <div className="mb-8 flex items-center gap-4">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shadow-lg shadow-indigo-500/20 flex-shrink-0 bg-white border border-slate-200/80 p-0.5">
+            <img
+              src="/apple-touch-icon.png"
+              alt="AdyaGo Favicon"
+              className="w-full h-full object-cover rounded-xl"
+            />
           </div>
-          <h1
-            className={`text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2 ${
-              isDark ? 'text-white' : 'text-slate-900'
-            }`}
-          >
-            AdyaGo <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-cyan-500">ERP</span>
-          </h1>
-          <p className={`text-xs sm:text-sm mt-1 font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            Autonomous Manufacturing Orchestration Interface
-          </p>
+          <div className="flex-1 min-w-0">
+            <h1
+              className={`text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'
+                }`}
+            >
+              AdyaGo <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-cyan-500">ERP</span>
+            </h1>
+            <p className={`text-xs sm:text-sm mt-1 font-normal leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              One Group. One System. One Vision.
+            </p>
+          </div>
         </div>
 
         {/* Security Lockout Alert HUD */}
         {isLocked && (
           <div
-            className={`mb-6 p-4 rounded-2xl border text-xs animate-fadeIn backdrop-blur-md ${
-              isDark
-                ? 'bg-amber-950/40 border-amber-500/40 text-amber-300'
-                : 'bg-amber-50 border-amber-200 text-amber-900'
-            }`}
+            className={`mb-6 p-4 rounded-2xl border text-xs animate-fadeIn backdrop-blur-md ${isDark
+              ? 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+              : 'bg-amber-50 border-amber-200 text-amber-900'
+              }`}
           >
             <div className="flex items-start gap-3">
               <Clock className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-500 animate-pulse" />
@@ -150,11 +163,10 @@ export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, 
         {/* Standard Error Alert */}
         {error && !isLocked && (
           <div
-            className={`mb-6 p-4 rounded-2xl border text-xs font-medium flex items-start gap-3 backdrop-blur-md animate-fadeIn ${
-              isDark
-                ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-                : 'bg-rose-50 border-rose-200 text-rose-700'
-            }`}
+            className={`mb-6 p-4 rounded-2xl border text-xs font-medium flex items-start gap-3 backdrop-blur-md animate-fadeIn ${isDark
+              ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+              : 'bg-rose-50 border-rose-200 text-rose-700'
+              }`}
           >
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-rose-500" />
             <div className="leading-relaxed">{error}</div>
@@ -167,9 +179,8 @@ export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, 
           <div>
             <div className="flex items-center justify-between mb-2">
               <label
-                className={`text-xs font-mono font-semibold tracking-wider flex items-center gap-1.5 uppercase ${
-                  isDark ? 'text-slate-300' : 'text-slate-700'
-                }`}
+                className={`text-xs font-mono font-semibold tracking-wider flex items-center gap-1.5 uppercase ${isDark ? 'text-slate-300' : 'text-slate-700'
+                  }`}
               >
                 <User className="w-3.5 h-3.5 text-indigo-500" /> Username
               </label>
@@ -187,11 +198,10 @@ export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, 
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter identity username"
-                className={`w-full pl-4 pr-4 py-3 rounded-xl border text-sm font-medium focus:outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isDark
-                    ? 'bg-slate-950/60 border-slate-800 text-slate-100 placeholder-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 group-hover:border-slate-700'
-                    : 'bg-slate-50/80 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 focus:bg-white group-hover:border-slate-300'
-                }`}
+                className={`w-full pl-4 pr-4 py-3 rounded-xl border text-sm font-medium focus:outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${isDark
+                  ? 'bg-slate-950/60 border-slate-800 text-slate-100 placeholder-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 group-hover:border-slate-700'
+                  : 'bg-slate-50/80 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 focus:bg-white group-hover:border-slate-300'
+                  }`}
               />
               <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400 group-focus-within:bg-indigo-500 transition" />
@@ -203,9 +213,8 @@ export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, 
           <div>
             <div className="flex items-center justify-between mb-2">
               <label
-                className={`text-xs font-mono font-semibold tracking-wider flex items-center gap-1.5 uppercase ${
-                  isDark ? 'text-slate-300' : 'text-slate-700'
-                }`}
+                className={`text-xs font-mono font-semibold tracking-wider flex items-center gap-1.5 uppercase ${isDark ? 'text-slate-300' : 'text-slate-700'
+                  }`}
               >
                 <Lock className="w-3.5 h-3.5 text-indigo-500" /> Access Key
               </label>
@@ -223,19 +232,17 @@ export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
-                className={`w-full pl-4 pr-11 py-3 rounded-xl border text-sm font-medium focus:outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isDark
-                    ? 'bg-slate-950/60 border-slate-800 text-slate-100 placeholder-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 group-hover:border-slate-700'
-                    : 'bg-slate-50/80 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 focus:bg-white group-hover:border-slate-300'
-                }`}
+                className={`w-full pl-4 pr-11 py-3 rounded-xl border text-sm font-medium focus:outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${isDark
+                  ? 'bg-slate-950/60 border-slate-800 text-slate-100 placeholder-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 group-hover:border-slate-700'
+                  : 'bg-slate-50/80 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 focus:bg-white group-hover:border-slate-300'
+                  }`}
               />
               <button
                 type="button"
                 disabled={isLocked}
                 onClick={() => setShowPassword(!showPassword)}
-                className={`absolute inset-y-0 right-0 pr-3.5 flex items-center transition ${
-                  isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'
-                }`}
+                className={`absolute inset-y-0 right-0 pr-3.5 flex items-center transition ${isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'
+                  }`}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -253,9 +260,8 @@ export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, 
                 className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
               />
               <span
-                className={`text-xs transition ${
-                  isDark ? 'text-slate-400 group-hover:text-slate-300' : 'text-slate-600 group-hover:text-slate-900'
-                }`}
+                className={`text-xs transition ${isDark ? 'text-slate-400 group-hover:text-slate-300' : 'text-slate-600 group-hover:text-slate-900'
+                  }`}
               >
                 Retain session credentials
               </span>
@@ -294,17 +300,15 @@ export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, 
 
         {/* Telemetry Micro Footer */}
         <div
-          className={`mt-8 pt-5 border-t flex items-center justify-between text-[10px] font-mono transition-colors ${
-            isDark ? 'border-slate-800/80 text-slate-500' : 'border-slate-100 text-slate-400'
-          }`}
+          className={`mt-8 pt-5 border-t flex items-center justify-between text-[10px] font-mono transition-colors ${isDark ? 'border-slate-800/80 text-slate-500' : 'border-slate-100 text-slate-400'
+            }`}
         >
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-            <span>SSL: TLS 1.3</span>
+            <span>Adyawinsa Group</span>
           </div>
-          <div>AES-256 GCM</div>
           <div className={isDark ? 'text-slate-400 font-semibold' : 'text-slate-600 font-semibold'}>
-            LATENCY: &lt;12ms
+            AdyaGo V1.0
           </div>
         </div>
       </div>

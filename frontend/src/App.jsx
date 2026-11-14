@@ -125,9 +125,8 @@ function AppContent() {
 
   return (
     <div
-      className={`min-h-screen w-full flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 relative overflow-hidden font-['Plus_Jakarta_Sans',sans-serif] transition-colors duration-300 ${
-        isDark ? 'bg-[#080c14] text-slate-100' : 'bg-slate-50 text-slate-800'
-      }`}
+      className={`min-h-screen w-full flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 relative overflow-hidden font-['Plus_Jakarta_Sans',sans-serif] transition-colors duration-300 ${isDark ? 'bg-[#080c14] text-slate-100' : 'bg-slate-50 text-slate-800'
+        }`}
     >
       {/* Top Cyber Transition Bar */}
       <TopProgressBar />
@@ -137,27 +136,24 @@ function AppContent() {
 
       {/* Cyber Grid Layer */}
       <div
-        className={`absolute inset-0 pointer-events-none -z-20 transition-opacity duration-500 ${
-          isDark
-            ? 'bg-[radial-gradient(#1e293b_1px,transparent_1px)] opacity-50'
-            : 'bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] opacity-70'
-        } [background-size:28px_28px]`}
+        className={`absolute inset-0 pointer-events-none -z-20 transition-opacity duration-500 ${isDark
+          ? 'bg-[radial-gradient(#1e293b_1px,transparent_1px)] opacity-50'
+          : 'bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] opacity-70'
+          } [background-size:28px_28px]`}
       />
 
       {/* Ambient Glow Lights */}
       <div
-        className={`absolute top-0 left-1/4 -translate-x-1/2 w-[700px] h-[400px] blur-[120px] pointer-events-none -z-10 transition-all duration-500 ${
-          isDark
-            ? 'bg-gradient-to-b from-indigo-600/20 via-cyan-500/10 to-transparent'
-            : 'bg-gradient-to-b from-indigo-400/20 via-cyan-400/15 to-transparent'
-        }`}
+        className={`absolute top-0 left-1/4 -translate-x-1/2 w-[700px] h-[400px] blur-[120px] pointer-events-none -z-10 transition-all duration-500 ${isDark
+          ? 'bg-gradient-to-b from-indigo-600/20 via-cyan-500/10 to-transparent'
+          : 'bg-gradient-to-b from-indigo-400/20 via-cyan-400/15 to-transparent'
+          }`}
       />
       <div
-        className={`absolute bottom-0 right-1/4 w-[600px] h-[400px] blur-[120px] pointer-events-none -z-10 transition-all duration-500 ${
-          isDark
-            ? 'bg-gradient-to-t from-cyan-600/15 via-indigo-600/10 to-transparent'
-            : 'bg-gradient-to-t from-cyan-500/10 via-indigo-400/10 to-transparent'
-        }`}
+        className={`absolute bottom-0 right-1/4 w-[600px] h-[400px] blur-[120px] pointer-events-none -z-10 transition-all duration-500 ${isDark
+          ? 'bg-gradient-to-t from-cyan-600/15 via-indigo-600/10 to-transparent'
+          : 'bg-gradient-to-t from-cyan-500/10 via-indigo-400/10 to-transparent'
+          }`}
       />
 
       {/* Main Routed Area */}
@@ -206,14 +202,11 @@ function AppContent() {
 
       {/* High-Tech Footer */}
       <footer
-        className={`mt-8 text-center text-xs font-mono flex items-center justify-center gap-3 transition-colors ${
-          isDark ? 'text-slate-500' : 'text-slate-400'
-        }`}
+        className={`mt-8 text-center text-xs font-mono flex items-center justify-center gap-3 transition-colors ${isDark ? 'text-slate-500' : 'text-slate-400'
+          }`}
       >
-        <span>ADYAGO // GO-GIN CORE</span>
-        <span>&bull;</span>
-        <span>AUTONOMOUS ERP INTELLIGENCE</span>
-        <span>&bull;</span>
+
+        <span>ADYAWINSA GROUP</span>
         <span>&copy; {new Date().getFullYear()}</span>
       </footer>
     </div>

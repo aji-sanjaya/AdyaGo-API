@@ -51,13 +51,13 @@ const getSelectStyles = (isDark) => ({
     backgroundColor: state.isSelected
       ? '#4f46e5'
       : state.isFocused
-      ? isDark ? '#1e293b' : '#eef2ff'
-      : 'transparent',
+        ? isDark ? '#1e293b' : '#eef2ff'
+        : 'transparent',
     color: state.isSelected
       ? '#ffffff'
       : state.isFocused
-      ? isDark ? '#38bdf8' : '#4338ca'
-      : isDark ? '#cbd5e1' : '#1e293b',
+        ? isDark ? '#38bdf8' : '#4338ca'
+        : isDark ? '#cbd5e1' : '#1e293b',
     borderRadius: '0.5rem',
     padding: '8px 12px',
     fontSize: '0.875rem',
@@ -294,23 +294,20 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
     <div className="relative w-full max-w-lg">
       {/* Ambient Lighting */}
       <div
-        className={`absolute -top-10 -left-10 w-64 h-64 rounded-full blur-3xl pointer-events-none -z-10 animate-pulse ${
-          isDark ? 'bg-indigo-500/15' : 'bg-indigo-500/10'
-        }`}
+        className={`absolute -top-10 -left-10 w-64 h-64 rounded-full blur-3xl pointer-events-none -z-10 animate-pulse ${isDark ? 'bg-indigo-500/15' : 'bg-indigo-500/10'
+          }`}
       />
       <div
-        className={`absolute -bottom-10 -right-10 w-64 h-64 rounded-full blur-3xl pointer-events-none -z-10 ${
-          isDark ? 'bg-cyan-500/15' : 'bg-cyan-500/10'
-        }`}
+        className={`absolute -bottom-10 -right-10 w-64 h-64 rounded-full blur-3xl pointer-events-none -z-10 ${isDark ? 'bg-cyan-500/15' : 'bg-cyan-500/10'
+          }`}
       />
 
       {/* Main High-Tech Container */}
       <div
-        className={`relative backdrop-blur-2xl rounded-3xl border transition-all duration-300 p-8 sm:p-10 overflow-hidden ${
-          isDark
-            ? 'bg-slate-900/80 border-slate-800/80 shadow-[0_20px_50px_rgba(8,11,20,0.8)]'
-            : 'bg-white/95 border-slate-200/90 shadow-[0_20px_50px_rgba(99,102,241,0.12)]'
-        }`}
+        className={`relative backdrop-blur-2xl rounded-3xl border transition-all duration-300 p-8 sm:p-10 overflow-hidden ${isDark
+          ? 'bg-slate-900/80 border-slate-800/80 shadow-[0_20px_50px_rgba(8,11,20,0.8)]'
+          : 'bg-white/95 border-slate-200/90 shadow-[0_20px_50px_rgba(99,102,241,0.12)]'
+          }`}
       >
         {/* Futuristic HUD Corner Brackets */}
         <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-indigo-500 rounded-tl-xl pointer-events-none" />
@@ -320,17 +317,15 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
 
         {/* Header */}
         <div
-          className={`flex items-center justify-between mb-6 pb-5 border-b ${
-            isDark ? 'border-slate-800' : 'border-slate-100'
-          }`}
+          className={`flex items-center justify-between mb-6 pb-5 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'
+            }`}
         >
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+              {/* <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" /> */}
               <h2
-                className={`text-xl font-bold tracking-tight ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
+                className={`text-xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'
+                  }`}
               >
                 Select Work Context
               </h2>
@@ -345,23 +340,21 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
           <button
             type="button"
             onClick={onBack}
-            className={`text-xs font-mono flex items-center gap-1.5 py-1.5 px-3 rounded-lg border transition ${
-              isDark
-                ? 'text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 border-slate-700/60'
-                : 'text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border-slate-200'
-            }`}
+            className={`text-xs font-mono flex items-center gap-1.5 py-1.5 px-3 rounded-lg border transition ${isDark
+              ? 'text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 border-slate-700/60'
+              : 'text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border-slate-200'
+              }`}
           >
-            <ArrowLeft className="w-3.5 h-3.5 text-indigo-500" /> Switch Account
+            <ArrowLeft className="w-3.5 h-3.5 text-indigo-500" /> Back
           </button>
         </div>
 
         {error && (
           <div
-            className={`mb-6 p-4 rounded-xl border text-xs font-medium flex items-start gap-3 backdrop-blur-md animate-fadeIn ${
-              isDark
-                ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-                : 'bg-rose-50 border-rose-200 text-rose-700'
-            }`}
+            className={`mb-6 p-4 rounded-xl border text-xs font-medium flex items-start gap-3 backdrop-blur-md animate-fadeIn ${isDark
+              ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+              : 'bg-rose-50 border-rose-200 text-rose-700'
+              }`}
           >
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-rose-500" />
             <div className="leading-relaxed">{error}</div>
@@ -372,9 +365,8 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
           {/* Client / Tenant */}
           <div>
             <label
-              className={`block text-xs font-mono font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${
-                isDark ? 'text-slate-300' : 'text-slate-700'
-              }`}
+              className={`block text-xs font-mono font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'
+                }`}
             >
               <Building2 className="w-3.5 h-3.5 text-cyan-500" /> Tenant / Client
             </label>
@@ -394,9 +386,8 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
           {/* Role */}
           <div>
             <label
-              className={`block text-xs font-mono font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${
-                isDark ? 'text-slate-300' : 'text-slate-700'
-              }`}
+              className={`block text-xs font-mono font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'
+                }`}
             >
               <Shield className="w-3.5 h-3.5 text-indigo-500" /> Role
             </label>
@@ -416,9 +407,8 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
           {/* Organization */}
           <div>
             <label
-              className={`block text-xs font-mono font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${
-                isDark ? 'text-slate-300' : 'text-slate-700'
-              }`}
+              className={`block text-xs font-mono font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'
+                }`}
             >
               <Network className="w-3.5 h-3.5 text-cyan-500" /> Organization
             </label>
@@ -438,9 +428,8 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
           {/* Warehouse */}
           <div>
             <label
-              className={`block text-xs font-mono font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${
-                isDark ? 'text-slate-300' : 'text-slate-700'
-              }`}
+              className={`block text-xs font-mono font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'
+                }`}
             >
               <Warehouse className="w-3.5 h-3.5 text-indigo-500" /> Warehouse (Optional)
             </label>
@@ -457,7 +446,7 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
               isClearable
             />
           </div>
-
+          <p></p>
           <button
             type="submit"
             disabled={submitting || !isFormValid}
@@ -481,6 +470,6 @@ export default function ContextModal({ initialAuth, credentials: propCredentials
           </button>
         </form>
       </div>
-    </div>
+    </div >
   );
 }
