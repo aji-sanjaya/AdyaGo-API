@@ -221,3 +221,18 @@ type RequisitionPOItem struct {
 	Lines        []RequisitionPOLineItem `json:"lines" gorm:"-"`
 }
 
+type RequisitionAuthorizerStatus struct {
+	ID                int64      `json:"id" gorm:"column:adw_requisitionauthorizerstatus_id"`
+	RequisitionID     int64      `json:"requisition_id" gorm:"column:m_requisition_id"`
+	Sequence          float64    `json:"sequence" gorm:"column:sequence"`
+	Name              string     `json:"name" gorm:"column:name"`
+	ApprovalDocStatus string     `json:"approval_doc_status" gorm:"column:approvaldocstatus"`
+	StatusLabel       string     `json:"status_label" gorm:"-"`
+	Description       string     `json:"description" gorm:"column:description"`
+	UserID            *int64     `json:"user_id" gorm:"column:ad_user_id"`
+	UserName          string     `json:"user_name" gorm:"column:user_name"`
+	UserDescription   string     `json:"user_description" gorm:"column:user_description"`
+	Updated           *time.Time `json:"updated" gorm:"column:updated"`
+}
+
+

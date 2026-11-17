@@ -41,6 +41,7 @@ import {
   History,
   ShoppingBag,
   FileSpreadsheet,
+  ShieldCheck,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
@@ -52,7 +53,7 @@ import PageLoader from '../../../components/ui/PageLoader';
 import { requisitionApi } from '../../../api/requisition';
 import { getCustomSelectStyles } from '../../../components/ui/selectStyles';
 import CustomDatePicker from '../../../components/ui/CustomDatePicker';
-import { decryptDocumentId } from '../../../utils/crypto';
+import { decryptDocumentId, encryptDocumentId } from '../../../utils/crypto';
 import ReauthModal from '../../../components/common/ReauthModal';
 import ConfirmDeleteModal from '../../../components/common/ConfirmDeleteModal';
 import RequisitionLineForm from './components/RequisitionLineForm';
@@ -60,6 +61,7 @@ import UploadLinesModal from './components/UploadLinesModal';
 import ChatTab from './components/ChatTab';
 import ChangeLogTab from './components/ChangeLogTab';
 import OrderTab from './components/OrderTab';
+import ApprovalTab from './components/ApprovalTab';
 import PrintPreviewModal from './components/PrintPreviewModal';
 import InvalidDocumentState from '../../../components/common/InvalidDocumentState';
 import PdfJsViewer from '../../../components/common/PdfJsViewer';
@@ -149,6 +151,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
   const [chatCount, setChatCount] = useState(0);
   const [changeLogCount, setChangeLogCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
+  const [approvalCount, setApprovalCount] = useState(0);
   const [lineCount, setLineCount] = useState(0);
 
   const totalLineCount = linesLoaded ? docLines.length : (lineCount || docHeader?.line_count || 0);
@@ -959,6 +962,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
           setChatCount(counts.chats || 0);
           setChangeLogCount(counts.change_logs || 0);
           setOrderCount(counts.orders || 0);
+          setApprovalCount(counts.approvals || 0);
           if (counts.lines !== undefined) {
             setLineCount(counts.lines);
           }
@@ -1098,18 +1102,34 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
       };
 
       if (isNew) {
-        await requisitionApi.createRequisition(
+        const res = await requisitionApi.createRequisition(
           payload,
           { client_id: clientId, user_id: userId },
           session?.token
         );
-        navigate('/create-pr', { replace: true });
+        const newId =
+          res?.data?.id ||
+          res?.data?.recordID ||
+          res?.data?.m_requisition_id ||
+          res?.id;
+        setSuccessMessage('Requisition created successfully!');
+        if (newId) {
+          const encId = encryptDocumentId(String(newId));
+          navigate(`/create-pr?documentID=${encId}`, { replace: true });
+        } else {
+          navigate('/create-pr', { replace: true });
+        }
       } else {
         await requisitionApi.updateRequisition(
           targetId,
           payload,
           session?.token
         );
+        requisitionApi.getRequisitionCounts(targetId).then((cRes) => {
+          if (cRes?.data?.approvals !== undefined) {
+            setApprovalCount(cRes.data.approvals);
+          }
+        }).catch(() => {});
         setSuccessMessage('Requisition header updated successfully.');
         setTimeout(() => setSuccessMessage(null), 4000);
       }
@@ -1158,14 +1178,30 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
       };
 
       if (isNew) {
-        await requisitionApi.createRequisition(
+        const res = await requisitionApi.createRequisition(
           payload,
           { client_id: clientId, user_id: userId },
           newToken
         );
-        navigate('/create-pr', { replace: true });
+        const newId =
+          res?.data?.id ||
+          res?.data?.recordID ||
+          res?.data?.m_requisition_id ||
+          res?.id;
+        setSuccessMessage('Requisition created successfully!');
+        if (newId) {
+          const encId = encryptDocumentId(String(newId));
+          navigate(`/create-pr?documentID=${encId}`, { replace: true });
+        } else {
+          navigate('/create-pr', { replace: true });
+        }
       } else {
         await requisitionApi.updateRequisition(targetId, payload, newToken);
+        requisitionApi.getRequisitionCounts(targetId).then((cRes) => {
+          if (cRes?.data?.approvals !== undefined) {
+            setApprovalCount(cRes.data.approvals);
+          }
+        }).catch(() => {});
         setSuccessMessage('Requisition header updated successfully.');
         setTimeout(() => setSuccessMessage(null), 4000);
       }
@@ -1517,6 +1553,27 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                 </button>
                 <button
                   type="button"
+                  onClick={() => !isNew && handleTabChange('approval')}
+                  disabled={isNew}
+                  title="Approval Status"
+                  className={`whitespace-nowrap py-3.5 px-1 border-b-2 text-xs font-mono font-semibold flex items-center gap-1.5 sm:gap-2 transition-colors ${
+                    isNew
+                      ? 'border-transparent text-slate-500 cursor-not-allowed opacity-50'
+                      : activeTab === 'approval'
+                      ? 'border-cyan-400 text-cyan-400 cursor-pointer'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4 flex-shrink-0" />
+                  <span className="hidden sm:inline">Approval</span>
+                  {!isNew && approvalCount > 0 && (
+                    <span className="px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                      {approvalCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
                   onClick={() => !isNew && handleTabChange('attachments')}
                   disabled={isNew}
                   title="Attachments"
@@ -1617,7 +1674,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                       isDark ? 'text-slate-200' : 'text-slate-800'
                     }`}
                   >
-                    Loading {activeTab === 'header' ? 'Header Details' : activeTab === 'lines' ? 'Requisition Lines' : activeTab === 'attachments' ? 'Attachments' : activeTab === 'chat' ? 'Discussions' : activeTab === 'order' ? 'Linked Orders' : 'Change Log'}...
+                    Loading {activeTab === 'header' ? 'Header Details' : activeTab === 'lines' ? 'Requisition Lines' : activeTab === 'approval' ? 'Approval Workflow' : activeTab === 'attachments' ? 'Attachments' : activeTab === 'chat' ? 'Discussions' : activeTab === 'order' ? 'Linked Orders' : 'Change Log'}...
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     Retrieving latest real-time ERP data from backend
@@ -1739,31 +1796,6 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                           />
                         </div>
                       </div>
-
-                      {/* Description */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-start gap-2 sm:gap-4">
-                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 mt-2">
-                          Description
-                        </label>
-                        <div className="col-span-1 sm:col-span-2">
-                          <textarea
-                            rows={3}
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            readOnly={isReadOnly}
-                            placeholder="Enter document description..."
-                            className={`w-full px-3.5 py-2.5 text-xs font-mono rounded-lg border outline-none resize-none transition-colors ${
-                              isReadOnly
-                                ? isDark
-                                  ? 'bg-slate-950/70 border-slate-800 text-slate-300 cursor-not-allowed'
-                                  : 'bg-slate-50 border-slate-200 text-slate-600 cursor-not-allowed'
-                                : isDark
-                                ? 'bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20'
-                                : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20'
-                            }`}
-                          />
-                        </div>
-                      </div>
                     </div>
 
                     {/* Right Column */}
@@ -1852,6 +1884,33 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                         </div>
                       </div>
                     </div>
+
+                    {/* Description (Full Width) */}
+                    <div className="col-span-1 md:col-span-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
+                      <div className="grid grid-cols-1 sm:grid-cols-6 sm:items-start gap-2 sm:gap-4">
+                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 mt-2 sm:col-span-1">
+                          Description
+                        </label>
+                        <div className="col-span-1 sm:col-span-5">
+                          <textarea
+                            rows={2}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            readOnly={isReadOnly}
+                            placeholder="Enter document description..."
+                            className={`w-full px-3.5 py-2.5 text-xs font-mono rounded-lg border outline-none resize-none transition-colors ${
+                              isReadOnly
+                                ? isDark
+                                  ? 'bg-slate-950/70 border-slate-800 text-slate-300 cursor-not-allowed'
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 cursor-not-allowed'
+                                : isDark
+                                ? 'bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20'
+                                : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1916,7 +1975,10 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                           />
                         </div>
                       </div>
+                    </div>
 
+                    {/* Right Column */}
+                    <div className="space-y-2.5">
                       {/* Cost Center */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
@@ -1937,10 +1999,7 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                           />
                         </div>
                       </div>
-                    </div>
 
-                    {/* Right Column */}
-                    <div className="space-y-2.5">
                       {/* Status */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
@@ -1950,48 +2009,6 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
                           <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-mono font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">
                             {displayStatus}
                           </span>
-                        </div>
-                      </div>
-
-                      {/* Checked By */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Checked By
-                        </label>
-                        <div className="col-span-1 sm:col-span-2">
-                          <Select
-                            value={selectedCheckedBy}
-                            onChange={(opt) => setCheckedById(opt ? opt.value : '')}
-                            options={userOptions}
-                            styles={formSelectStyles}
-                            placeholder="- Select -"
-                            isDisabled={isReadOnly}
-                            isSearchable
-                            menuPlacement="top"
-                            menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
-                            menuPosition="fixed"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Approved By */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                        <label className="text-left sm:text-right text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                          Approved By
-                        </label>
-                        <div className="col-span-1 sm:col-span-2">
-                          <Select
-                            value={selectedApprovedBy}
-                            onChange={(opt) => setApprovedById(opt ? opt.value : '')}
-                            options={userOptions}
-                            styles={formSelectStyles}
-                            placeholder="- Select -"
-                            isDisabled={isReadOnly}
-                            isSearchable
-                            menuPlacement="top"
-                            menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
-                            menuPosition="fixed"
-                          />
                         </div>
                       </div>
                     </div>
@@ -2733,6 +2750,15 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
               </div>
             )}
 
+            {/* Tab Content: Approval Tab */}
+            {activeTab === 'approval' && !isNew && (
+              <ApprovalTab
+                targetId={targetId}
+                isDark={isDark}
+                onTotalApprovalsChange={(count) => setApprovalCount(count)}
+              />
+            )}
+
             {/* Tab Content: Attachments Tab */}
             {activeTab === 'attachments' && (
               <div className="p-6 sm:p-8 space-y-4">
@@ -3413,12 +3439,16 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
         onClose={() => setShowPrintModal(false)}
         requisition={{
           ...docHeader,
+          id: targetId || docHeader?.m_requisition_id || docHeader?.id,
+          m_requisition_id: targetId || docHeader?.m_requisition_id || docHeader?.id,
           documentno: displayDocNo,
           datedoc: dateDoc,
           daterequired: dateRequired,
           description: description,
           status_label: displayStatus,
           cost_center_value: selectedCc?.label ? selectedCc.label.split(' ')[0] : (docHeader?.cost_center_value || 'PROD'),
+          cost_center_name: selectedCc?.label || docHeader?.cost_center_name || docHeader?.cost_center_value,
+          warehouse_name: selectedWh?.label || docHeader?.warehouse_name || docHeader?.warehouse || '-',
           client_name: clientDisplayName,
           logo_base64: docHeader?.logo_base64 || options?.logo_base64,
         }}
@@ -3426,7 +3456,10 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
         options={{
           documentno: displayDocNo,
           datedoc: dateDoc,
+          daterequired: dateRequired,
           description: description,
+          costCenterValue: selectedCc?.label ? selectedCc.label.split(' ')[0] : (docHeader?.cost_center_value || 'PROD'),
+          warehouseName: selectedWh?.label || docHeader?.warehouse_name,
           logoBase64: docHeader?.logo_base64 || options?.logo_base64,
         }}
         isDark={isDark}

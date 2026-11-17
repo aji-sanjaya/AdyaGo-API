@@ -54,6 +54,9 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 
 		// Linked Purchase Orders
 		reqGroup.GET("/:id/orders", h.GetOrders)
+
+		// Authorizers / Approval Status
+		reqGroup.GET("/:id/authorizers", h.GetAuthorizers)
 	}
 }
 
@@ -773,5 +776,29 @@ func (h *Handler) GetOrders(c *gin.Context) {
 		"total":   len(orders),
 	})
 }
+
+func (h *Handler) GetAuthorizers(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid requisition ID",
+		})
+		return
+	}
+
+	authorizers, err := h.service.GetRequisitionAuthorizers(id)
+	if err != nil {
+		h.respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    authorizers,
+		"total":   len(authorizers),
+	})
+}
+
 
 

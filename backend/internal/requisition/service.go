@@ -572,6 +572,17 @@ func (s *Service) CreateRequisition(token string, clientID int, userID int, req 
 		return nil, fmt.Errorf("failed to create requisition via API Engine: %w", err)
 	}
 
+	newID := getIDFromResult(res)
+	if newID > 0 {
+		var ccID int
+		if req.CostCenterID != nil {
+			ccID = *req.CostCenterID
+		}
+		if err := s.syncRequisitionAuthorizers(token, newID, clientID, req.OrgID, ccID, userID); err != nil {
+			log.Printf("[Requisition] Warning: failed to sync authorizers for new requisition %d: %v", newID, err)
+		}
+	}
+
 	return res, nil
 }
 
@@ -764,6 +775,27 @@ func (s *Service) UpdateRequisition(token string, requisitionID int, req CreateR
 	res, err := s.idempiereClient.PutModel(token, "m_requisition", requisitionID, payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update requisition via API Engine: %w", err)
+	}
+
+	var ccID int
+	if req.CostCenterID != nil {
+		ccID = *req.CostCenterID
+	}
+	var reqHeader struct {
+		ClientID int `gorm:"column:ad_client_id"`
+		OrgID    int `gorm:"column:ad_org_id"`
+	}
+	_ = s.db.DB.Raw("SELECT ad_client_id, ad_org_id FROM m_requisition WHERE m_requisition_id = ?", requisitionID).Scan(&reqHeader)
+	clientID := reqHeader.ClientID
+	if clientID == 0 {
+		clientID = 1000000
+	}
+	orgID := req.OrgID
+	if orgID == 0 {
+		orgID = reqHeader.OrgID
+	}
+	if err := s.syncRequisitionAuthorizers(token, requisitionID, clientID, orgID, ccID, 0); err != nil {
+		log.Printf("[Requisition] Warning: failed to sync authorizers for requisition %d: %v", requisitionID, err)
 	}
 
 	return res, nil
@@ -1122,6 +1154,7 @@ type RequisitionCounts struct {
 	Chats       int `json:"chats"`
 	Orders      int `json:"orders"`
 	ChangeLogs  int `json:"change_logs"`
+	Approvals   int `json:"approvals"`
 }
 
 func (s *Service) GetRequisitionCounts(requisitionID int) (*RequisitionCounts, error) {
@@ -1187,18 +1220,27 @@ func (s *Service) GetRequisitionCounts(requisitionID int) (*RequisitionCounts, e
 		   ))
 	`, requisitionID, requisitionID).Scan(&counts.ChangeLogs)
 
+	// 6. Approvals / Authorizers count
+	_ = s.db.DB.Raw(`
+		SELECT COUNT(*)
+		FROM adw_requisitionauthorizerstatus
+		WHERE m_requisition_id = ? AND (isactive IS NULL OR isactive = 'Y')
+	`, requisitionID).Scan(&counts.Approvals)
+
 	return counts, nil
 }
 
 func getIDFromResult(res map[string]interface{}) int {
-	if v, ok := res["id"]; ok {
-		switch n := v.(type) {
-		case float64:
-			return int(n)
-		case int:
-			return n
-		case int64:
-			return int(n)
+	for _, key := range []string{"id", "recordID", "record-id", "record_id", "m_requisition_id", "M_Requisition_ID"} {
+		if v, ok := res[key]; ok {
+			switch n := v.(type) {
+			case float64:
+				return int(n)
+			case int:
+				return n
+			case int64:
+				return int(n)
+			}
 		}
 	}
 	return 0
@@ -1513,3 +1555,245 @@ func (s *Service) GetRequisitionOrders(requisitionID int) ([]RequisitionPOItem, 
 
 	return orders, nil
 }
+
+func (s *Service) GetRequisitionAuthorizers(requisitionID int) ([]RequisitionAuthorizerStatus, error) {
+	var list []RequisitionAuthorizerStatus
+
+	query := `
+		SELECT 
+			s.adw_requisitionauthorizerstatus_id,
+			s.m_requisition_id,
+			s.sequence,
+			s.name,
+			s.approvaldocstatus,
+			COALESCE(s.description, '') as description,
+			s.updated,
+			s.ad_user_id,
+			COALESCE(u.name, '') as user_name,
+			COALESCE(u.description, '') as user_description
+		FROM adw_requisitionauthorizerstatus s
+		LEFT JOIN ad_user u ON u.ad_user_id = s.ad_user_id
+		WHERE s.m_requisition_id = ? AND (s.isactive IS NULL OR s.isactive = 'Y')
+		ORDER BY s.sequence ASC, s.adw_requisitionauthorizerstatus_id ASC
+	`
+
+	if err := s.db.DB.Raw(query, requisitionID).Scan(&list).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch requisition authorizer status: %w", err)
+	}
+
+	for i := range list {
+		switch strings.ToUpper(strings.TrimSpace(list[i].ApprovalDocStatus)) {
+		case "AP":
+			list[i].StatusLabel = "Approved"
+		case "CO":
+			list[i].StatusLabel = "Completed"
+		case "IP":
+			list[i].StatusLabel = "In Progress"
+		case "DR":
+			list[i].StatusLabel = "Draft"
+		case "RJ":
+			list[i].StatusLabel = "Rejected"
+		case "VO":
+			list[i].StatusLabel = "Voided"
+		case "CL":
+			list[i].StatusLabel = "Closed"
+		case "NA":
+			list[i].StatusLabel = "Not Approved"
+		case "IN":
+			list[i].StatusLabel = "Invalid"
+		default:
+			if list[i].ApprovalDocStatus != "" {
+				list[i].StatusLabel = list[i].ApprovalDocStatus
+			} else {
+				list[i].StatusLabel = "Pending"
+			}
+		}
+	}
+
+	return list, nil
+}
+
+type authorizerDef struct {
+	ID           int64   `gorm:"column:adw_requisitionauthorizer_id"`
+	ClientID     int64   `gorm:"column:ad_client_id"`
+	OrgID        int64   `gorm:"column:ad_org_id"`
+	CostCenterID int64   `gorm:"column:c_costcenter_id"`
+	Sequence     float64 `gorm:"column:sequence"`
+	Name         string  `gorm:"column:name"`
+	UserID       int64   `gorm:"column:ad_user_id"`
+}
+
+func (s *Service) syncRequisitionAuthorizers(token string, requisitionID int, clientID int, orgID int, costCenterID int, userID int) error {
+	if requisitionID <= 0 {
+		return nil
+	}
+
+	// 1. If costCenterID is not provided, fetch from m_requisition
+	if costCenterID <= 0 {
+		var reqRow struct {
+			CostCenterID *int `gorm:"column:c_costcenter_id"`
+			ClientID     int  `gorm:"column:ad_client_id"`
+			OrgID        int  `gorm:"column:ad_org_id"`
+		}
+		if err := s.db.DB.Raw("SELECT c_costcenter_id, ad_client_id, ad_org_id FROM m_requisition WHERE m_requisition_id = ?", requisitionID).Scan(&reqRow).Error; err == nil {
+			if reqRow.CostCenterID != nil {
+				costCenterID = *reqRow.CostCenterID
+			}
+			if clientID <= 0 {
+				clientID = reqRow.ClientID
+			}
+			if orgID <= 0 {
+				orgID = reqRow.OrgID
+			}
+		}
+	}
+
+	if costCenterID <= 0 {
+		log.Printf("[AuthorizerSync] No cost center associated with requisition %d, skipping authorizer sync", requisitionID)
+		return nil
+	}
+
+	// 2. Query matching authorizers from ADW_RequisitionAuthorizer
+	var authorizers []authorizerDef
+	err := s.db.DB.Raw(`
+		SELECT 
+			adw_requisitionauthorizer_id,
+			ad_client_id,
+			ad_org_id,
+			c_costcenter_id,
+			sequence,
+			name,
+			ad_user_id
+		FROM adw_requisitionauthorizer
+		WHERE c_costcenter_id = ? AND (isactive IS NULL OR isactive = 'Y')
+		ORDER BY sequence ASC, adw_requisitionauthorizer_id ASC
+	`, costCenterID).Scan(&authorizers).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to query ADW_RequisitionAuthorizer: %w", err)
+	}
+
+	if len(authorizers) == 0 {
+		log.Printf("[AuthorizerSync] No authorizers configured in ADW_RequisitionAuthorizer for cost center %d", costCenterID)
+		return nil
+	}
+
+	// 3. Check existing authorizer status records for this requisition
+	var existingAuthorizers []struct {
+		ID                int64   `gorm:"column:adw_requisitionauthorizerstatus_id"`
+		UserID            int64   `gorm:"column:ad_user_id"`
+		Sequence          float64 `gorm:"column:sequence"`
+		ApprovalDocStatus string  `gorm:"column:approvaldocstatus"`
+	}
+	s.db.DB.Raw(`
+		SELECT adw_requisitionauthorizerstatus_id, ad_user_id, sequence, approvaldocstatus
+		FROM adw_requisitionauthorizerstatus 
+		WHERE m_requisition_id = ? AND (isactive IS NULL OR isactive = 'Y')
+	`, requisitionID).Scan(&existingAuthorizers)
+
+	if len(existingAuthorizers) > 0 {
+		hasApproved := false
+		for _, ea := range existingAuthorizers {
+			st := strings.ToUpper(strings.TrimSpace(ea.ApprovalDocStatus))
+			if st == "AP" || st == "CO" {
+				hasApproved = true
+				break
+			}
+		}
+
+		if hasApproved {
+			log.Printf("[AuthorizerSync] Requisition %d already has approved sign-offs, keeping existing authorizer status records", requisitionID)
+			return nil
+		}
+
+		if len(existingAuthorizers) == len(authorizers) {
+			identical := true
+			for i := range authorizers {
+				if existingAuthorizers[i].UserID != authorizers[i].UserID || existingAuthorizers[i].Sequence != authorizers[i].Sequence {
+					identical = false
+					break
+				}
+			}
+			if identical {
+				log.Printf("[AuthorizerSync] Authorizers for requisition %d already match cost center %d, skipping duplicate", requisitionID, costCenterID)
+				return nil
+			}
+		}
+
+		// Realign authorizers: remove unapproved ones before inserting new
+		_ = s.db.DB.Exec("DELETE FROM adw_requisitionauthorizerstatus WHERE m_requisition_id = ? AND approvaldocstatus IN ('IP', 'DR', '')", requisitionID)
+	}
+
+	// 4. Insert each authorizer into ADW_RequisitionAuthorizerStatus
+	creatorID := userID
+	if creatorID <= 0 {
+		creatorID = 100
+	}
+
+	for _, auth := range authorizers {
+		cID := clientID
+		if cID <= 0 {
+			cID = int(auth.ClientID)
+		}
+		oID := orgID
+		if oID <= 0 {
+			oID = int(auth.OrgID)
+		}
+
+		payload := map[string]interface{}{
+			"M_Requisition_ID":  requisitionID,
+			"AD_Client_ID":      cID,
+			"AD_Org_ID":         oID,
+			"AD_User_ID":        auth.UserID,
+			"Name":              auth.Name,
+			"Sequence":          auth.Sequence,
+			"ApprovalDocStatus": "IP",
+			"IsActive":          true,
+		}
+
+		apiSuccess := false
+		if token != "" {
+			if _, err := s.idempiereClient.PostModel(token, "ADW_RequisitionAuthorizerStatus", payload); err == nil {
+				apiSuccess = true
+				log.Printf("[AuthorizerSync] Inserted authorizer '%s' via REST API for requisition %d", auth.Name, requisitionID)
+			} else {
+				log.Printf("[AuthorizerSync] REST API PostModel failed for authorizer '%s': %v. Falling back to DB insert.", auth.Name, err)
+			}
+		}
+
+		if !apiSuccess {
+			insertSQL := `
+				INSERT INTO adw_requisitionauthorizerstatus (
+					adw_requisitionauthorizerstatus_id,
+					adw_requisitionauthorizerstatus_uu,
+					ad_client_id,
+					ad_org_id,
+					m_requisition_id,
+					ad_user_id,
+					sequence,
+					name,
+					approvaldocstatus,
+					isactive,
+					created,
+					createdby,
+					updated,
+					updatedby
+				) VALUES (
+					nextidfunc(1000088, 'N'),
+					gen_random_uuid(),
+					?, ?, ?, ?, ?, ?, 'IP', 'Y',
+					NOW(), ?, NOW(), ?
+				)
+			`
+			if insertErr := s.db.DB.Exec(insertSQL, cID, oID, requisitionID, auth.UserID, auth.Sequence, auth.Name, creatorID, creatorID).Error; insertErr != nil {
+				log.Printf("[AuthorizerSync] Failed to insert authorizer '%s' into adw_requisitionauthorizerstatus: %v", auth.Name, insertErr)
+				return fmt.Errorf("failed to insert authorizer status: %w", insertErr)
+			}
+			log.Printf("[AuthorizerSync] Inserted authorizer '%s' (Seq: %v, User: %d) into adw_requisitionauthorizerstatus for requisition %d", auth.Name, auth.Sequence, auth.UserID, requisitionID)
+		}
+	}
+
+	return nil
+}
+
+

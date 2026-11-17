@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, FileText, AlertCircle } from 'lucide-react';
 import { generateRequisitionPdf } from '../../../../utils/requisitionPdfGenerator';
+import { requisitionApi } from '../../../../api/requisition';
 import PdfJsViewer from '../../../../components/common/PdfJsViewer';
 
 const PrintPreviewModal = ({
@@ -9,6 +10,7 @@ const PrintPreviewModal = ({
   onClose,
   requisition,
   lines = [],
+  authorizers = null,
   options = {},
   isDark = true,
 }) => {
@@ -27,7 +29,35 @@ const PrintPreviewModal = ({
       setLoading(true);
       setError(null);
 
-      generateRequisitionPdf(requisition, lines, options)
+      const targetReqId = requisition?.id || requisition?.m_requisition_id;
+
+      const fetchAuthorizers = async () => {
+        if (authorizers && Array.isArray(authorizers) && authorizers.length > 0) {
+          return authorizers;
+        }
+        if (options?.authorizers && Array.isArray(options.authorizers) && options.authorizers.length > 0) {
+          return options.authorizers;
+        }
+        if (targetReqId) {
+          try {
+            const res = await requisitionApi.getAuthorizers(targetReqId);
+            if (res && res.data) {
+              return res.data;
+            }
+          } catch (e) {
+            console.warn('Failed to load authorizers for print preview:', e);
+          }
+        }
+        return [];
+      };
+
+      fetchAuthorizers()
+        .then((authList) => {
+          return generateRequisitionPdf(requisition, lines, {
+            ...options,
+            authorizers: authList,
+          });
+        })
         .then(({ doc, blob, blobUrl }) => {
           const url = blobUrl || (blob ? URL.createObjectURL(blob) : null);
           currentBlobUrl = url;
@@ -47,7 +77,7 @@ const PrintPreviewModal = ({
         URL.revokeObjectURL(currentBlobUrl);
       }
     };
-  }, [isOpen, requisition, lines, options]);
+  }, [isOpen, requisition, lines, authorizers, options]);
 
   // Handle ESC key to close modal
   useEffect(() => {

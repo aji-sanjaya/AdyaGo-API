@@ -183,4 +183,8 @@ export const requisitionApi = {
   getOrders: async (id) => {
     return dedupedGet(`/requisitions/${id}/orders`);
   },
+
+  getAuthorizers: async (id) => {
+    return dedupedGet(`/requisitions/${id}/authorizers`);
+  },
 };

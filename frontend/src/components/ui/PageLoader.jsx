@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cpu, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 export default function PageLoader({ 
@@ -32,9 +32,13 @@ export default function PageLoader({
         {/* Counter-Rotating Inner Ring */}
         <div className="absolute w-14 h-14 rounded-full border-2 border-t-indigo-500 border-r-cyan-400 border-b-transparent border-l-transparent animate-[spin_2s_linear_infinite]" />
 
-        {/* Center Glowing Chip Icon */}
-        <div className="absolute w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-cyan-500/30">
-          <Cpu className="w-5 h-5 animate-pulse" />
+        {/* Center Glowing Logo */}
+        <div className="absolute w-10 h-10 rounded-2xl overflow-hidden shadow-lg shadow-cyan-500/30 bg-white border border-slate-200/80 p-0.5 flex items-center justify-center">
+          <img
+            src="/apple-touch-icon.png"
+            alt="AdyaGo Logo"
+            className="w-full h-full object-cover rounded-xl"
+          />
         </div>
       </div>
 

@@ -26,6 +26,9 @@ export default function HomePage() {
 
     let isMounted = true;
     setLoading(true);
+    const startTime = Date.now();
+    const MIN_LOAD_TIME = 500; // Smooth loading animation duration to prevent jarring flicker
+
     authApi.getWelcomeMenus(roleId)
       .then((res) => {
         if (!isMounted) return;
@@ -37,7 +40,12 @@ export default function HomePage() {
         setError('Failed to load main menu modules.');
       })
       .finally(() => {
-        if (isMounted) setLoading(false);
+        if (!isMounted) return;
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, MIN_LOAD_TIME - elapsed);
+        setTimeout(() => {
+          if (isMounted) setLoading(false);
+        }, remaining);
       });
 
     return () => { isMounted = false; };
@@ -69,8 +77,15 @@ export default function HomePage() {
     }
   };
 
-  if (loading && menus.length === 0) {
-    return <HomeSkeleton />;
+  if (loading) {
+    return (
+      <div className="w-full min-h-[75vh] flex items-center justify-center animate-fadeIn">
+        <PageLoader
+          message="Loading Enterprise Portal..."
+          subtext="Synchronizing authorized operational modules..."
+        />
+      </div>
+    );
   }
 
   return (
@@ -178,12 +193,7 @@ export default function HomePage() {
           </span>
         </div>
 
-        {loading ? (
-          <PageLoader
-            message="Loading Authorized Enterprise Modules..."
-            subtext="Authenticating role permissions against ADW_Web_Portal_Menus"
-          />
-        ) : error ? (
+        {error ? (
           <div
             className={`p-8 rounded-3xl border text-center ${
               isDark ? 'bg-rose-950/20 border-rose-500/30 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-700'

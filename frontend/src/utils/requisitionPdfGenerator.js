@@ -194,52 +194,122 @@ export const generateRequisitionPdf = async (requisition = {}, lines = [], optio
   }
 
   const costCenterVal = requisition.cost_center_value || options.costCenterValue || 'PROD';
+  const costCenterDisplay = requisition.cost_center_name || costCenterVal;
   const titleText = `Purchase Requisition ${costCenterVal}`;
-
-  // Box positions
-  const boxY = 34;
-  const boxHeight = 36;
-  const col1W = 76; // Info column
-  const col2W = 36; // Prepared by
-  const col3W = 36; // Checked By
-  const col4W = 38; // Approved by
-
-  const x1 = marginLeft;
-  const x2 = x1 + col1W; // 88
-  const x3 = x2 + col2W; // 124
-  const x4 = x3 + col3W; // 160
-  const x5 = marginRight; // 198
 
   const docNo = requisition.documentno || options.documentno || '-';
   const dateDocFormatted = formatDateDoc(requisition.datedoc || options.datedoc);
   const statusLabel = requisition.status_label || requisition.docstatus || 'Draft';
+  const dateRequiredFormatted = formatDateDoc(requisition.daterequired || options.daterequired);
+  const warehouseDisplay = requisition.warehouse_name || options.warehouseName || requisition.warehouse || '-';
+  const descriptionText = requisition.description || options.description || '-';
 
-  // Pre-generate QR Codes asynchronously
+  // -------------------------------------------------------------
+  // DYNAMIC SIGNATURE AUTHORIZERS (FROM ADW_RequisitionAuthorizerStatus)
+  // -------------------------------------------------------------
+  const rawAuthorizers = options.authorizers || requisition.authorizers || [];
+  let sortedAuthorizers = Array.isArray(rawAuthorizers) ? [...rawAuthorizers] : [];
+  sortedAuthorizers.sort((a, b) => {
+    const seqA = Number(a.sequence ?? a.seq ?? 0);
+    const seqB = Number(b.sequence ?? b.seq ?? 0);
+    return seqA - seqB;
+  });
+
+  // Fallback if no authorizers are found
+  if (sortedAuthorizers.length === 0) {
+    if (requisition.checked_by_name || requisition.approved_by_name) {
+      sortedAuthorizers = [
+        {
+          name: 'Checked By',
+          user_name: requisition.checked_by_name || 'Checked User',
+          isapproved: requisition.checked_isapproved || 'IP',
+          updated: requisition.checked_date || null,
+          sequence: 10,
+        },
+        {
+          name: 'Approved by',
+          user_name: requisition.approved_by_name || 'Approved User',
+          isapproved: requisition.approved_isapproved || 'IP',
+          updated: requisition.approved_date || null,
+          sequence: 20,
+        },
+      ];
+    } else {
+      sortedAuthorizers = [
+        {
+          name: 'Checked By',
+          user_name: 'Checked User',
+          isapproved: 'IP',
+          sequence: 10,
+        },
+        {
+          name: 'Approved by',
+          user_name: 'Approved User',
+          isapproved: 'IP',
+          sequence: 20,
+        },
+      ];
+    }
+  }
+
+  // Pre-generate QR Codes for dynamic signature list
   const preparedByName = requisition.createdby || options.createdby || 'User';
   const rawCreatedAt = requisition.created_at || requisition.created || requisition.datedoc || new Date().toISOString();
   const preparedDateStr = formatDateTime(rawCreatedAt);
   const preparedQrText = `Prepared by ${preparedByName} on ${rawCreatedAt}`;
   const preparedQrUrl = await generateQRCodeDataUrl(preparedQrText);
 
-  const isCheckedApproved = requisition.checked_isapproved === 'AP' && requisition.checked_date;
-  const isCheckedRejected = requisition.checked_isapproved === 'RE';
-  const checkedName = requisition.checked_by_name || 'Checked User';
-  const checkedDateStr = formatDateTime(requisition.checked_date);
-  let checkedQrUrl = null;
-  if (isCheckedApproved) {
-    const checkedQrText = `Checked by ${checkedName} on ${requisition.checked_date}`;
-    checkedQrUrl = await generateQRCodeDataUrl(checkedQrText);
+  const sigList = [
+    {
+      title: 'Prepared by',
+      signerName: preparedByName,
+      dateText: preparedDateStr,
+      qrUrl: preparedQrUrl,
+      status: 'AP',
+    },
+  ];
+
+  for (const auth of sortedAuthorizers) {
+    const title = auth.name || 'Authorizer';
+    const signerName = auth.user_name || auth.user_description || 'Authorized User';
+    const statusCode = (auth.approval_doc_status || auth.isapproved || '').toUpperCase();
+    const isApproved = statusCode === 'AP' || statusCode === 'CO';
+    const isRejected = statusCode === 'RE';
+    const updateDate = auth.updated || auth.updated_at;
+
+    let qrUrl = null;
+    let dateText = '';
+    if (isApproved && updateDate) {
+      dateText = formatDateTime(updateDate);
+      const qrText = `${title} by ${signerName} on ${updateDate}`;
+      qrUrl = await generateQRCodeDataUrl(qrText);
+    } else if (isApproved) {
+      dateText = 'Approved';
+    } else if (isRejected) {
+      dateText = updateDate ? formatDateTime(updateDate) : '';
+    }
+
+    sigList.push({
+      title,
+      signerName,
+      dateText,
+      qrUrl,
+      status: isApproved ? 'AP' : (isRejected ? 'RE' : 'IP'),
+    });
   }
 
-  const isAppApproved = requisition.approved_isapproved === 'AP' && requisition.approved_date;
-  const isAppRejected = requisition.approved_isapproved === 'RE';
-  const approvedName = requisition.approved_by_name || 'Approved User';
-  const approvedDateStr = formatDateTime(requisition.approved_date);
-  let approvedQrUrl = null;
-  if (isAppApproved) {
-    const approvedQrText = `Approved by ${approvedName} on ${requisition.approved_date}`;
-    approvedQrUrl = await generateQRCodeDataUrl(approvedQrText);
-  }
+  // -------------------------------------------------------------
+  // TOP HEADER BOX DIMENSIONS (WITH DESCRIPTION)
+  // -------------------------------------------------------------
+  const boxY = 34;
+  const metaHeight = 16.5;
+
+  // Split description text to fit within header box width
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  const descLines = doc.splitTextToSize(descriptionText, contentWidth - 30);
+  const descHeight = Math.max(descLines.length * 3.8, 7.5);
+  const boxHeight = metaHeight + descHeight + 3;
 
   // -------------------------------------------------------------
   // FUNCTION TO DRAW THE FULL HEADER ON EVERY PAGE
@@ -279,137 +349,164 @@ export const generateRequisitionPdf = async (requisition = {}, lines = [], optio
     doc.setTextColor(0, 0, 0);
     doc.text(titleText, marginRight, startTopY + 19, { align: 'right' });
 
-    // 3. Document Info & Signatures Box
+    // 3. Document Info & Description Box (Top Header)
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.3);
-    doc.rect(x1, boxY, contentWidth, boxHeight);
+    doc.rect(marginLeft, boxY, contentWidth, boxHeight);
 
-    // Vertical dividers
-    doc.line(x2, boxY, x2, boxY + boxHeight);
-    doc.line(x3, boxY, x3, boxY + boxHeight);
-    doc.line(x4, boxY, x4, boxY + boxHeight);
+    // Section A: Meta Info (2 Columns: Left & Right)
+    const metaY = boxY + 5;
+    const rowSpacing = 4.5;
+    const leftColX = marginLeft + 3;
+    const leftColonX = marginLeft + 24;
+    const leftValX = marginLeft + 27;
 
-    // Column 1: Document Meta
-    doc.setFontSize(9);
-    const metaY = boxY + 6.5;
-    const rowSpacing = 6;
+    const midX = marginLeft + 96;
+    const rightColX = midX;
+    const rightColonX = midX + 26;
+    const rightValX = midX + 29;
 
-    // Row 1: Document
+    // Subtle vertical divider between left & right meta columns
+    doc.setDrawColor(210, 210, 210);
+    doc.setLineWidth(0.2);
+    doc.line(midX - 4, boxY + 1.5, midX - 4, boxY + metaHeight);
+
+    doc.setFontSize(8.5);
+
+    // Left Column:
+    // Row 1: Document No
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
-    doc.text('Document', x1 + 3, metaY);
-    doc.text(':', x1 + 22, metaY);
+    doc.text('Document', leftColX, metaY);
+    doc.text(':', leftColonX, metaY);
     doc.setFont('helvetica', 'bold');
-    doc.text(String(docNo), x1 + 25, metaY);
+    doc.text(String(docNo), leftValX, metaY);
 
     // Row 2: Date
     doc.setFont('helvetica', 'normal');
-    doc.text('Date', x1 + 3, metaY + rowSpacing);
-    doc.text(':', x1 + 22, metaY + rowSpacing);
+    doc.text('Date', leftColX, metaY + rowSpacing);
+    doc.text(':', leftColonX, metaY + rowSpacing);
     doc.setFont('helvetica', 'bold');
-    doc.text(dateDocFormatted, x1 + 25, metaY + rowSpacing);
+    doc.text(dateDocFormatted, leftValX, metaY + rowSpacing);
 
     // Row 3: Status
     doc.setFont('helvetica', 'normal');
-    doc.text('Status', x1 + 3, metaY + rowSpacing * 2);
-    doc.text(':', x1 + 22, metaY + rowSpacing * 2);
+    doc.text('Status', leftColX, metaY + rowSpacing * 2);
+    doc.text(':', leftColonX, metaY + rowSpacing * 2);
     doc.setFont('helvetica', 'bold');
-    doc.text(statusLabel, x1 + 25, metaY + rowSpacing * 2);
+    doc.text(statusLabel, leftValX, metaY + rowSpacing * 2);
 
-    // Column 2: Prepared by
-    const col2Center = x2 + col2W / 2;
-    doc.setFont('helvetica', 'italic');
+    // Right Column:
+    // Row 1: Cost Center
+    doc.setFont('helvetica', 'normal');
+    doc.text('Cost Center', rightColX, metaY);
+    doc.text(':', rightColonX, metaY);
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(costCenterDisplay), rightValX, metaY);
+
+    // Row 2: Date Required
+    doc.setFont('helvetica', 'normal');
+    doc.text('Date Required', rightColX, metaY + rowSpacing);
+    doc.text(':', rightColonX, metaY + rowSpacing);
+    doc.setFont('helvetica', 'bold');
+    doc.text(dateRequiredFormatted, rightValX, metaY + rowSpacing);
+
+    // Row 3: Warehouse
+    doc.setFont('helvetica', 'normal');
+    doc.text('Warehouse', rightColX, metaY + rowSpacing * 2);
+    doc.text(':', rightColonX, metaY + rowSpacing * 2);
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(warehouseDisplay), rightValX, metaY + rowSpacing * 2);
+
+    // Horizontal divider before Description
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.25);
+    doc.line(marginLeft, boxY + metaHeight, marginRight, boxY + metaHeight);
+
+    // Section B: Description
+    const descY = boxY + metaHeight + 4.2;
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.5);
-    doc.text('Prepared by', col2Center, boxY + 4.5, { align: 'center' });
-
-    if (preparedQrUrl) {
-      const qrSize = 17;
-      const qrX = col2Center - qrSize / 2;
-      doc.addImage(preparedQrUrl, 'PNG', qrX, boxY + 6.5, qrSize, qrSize);
-    }
-
-    doc.setFont('helvetica', 'bolditalic');
-    doc.setFontSize(7.5);
-    doc.text(preparedByName, col2Center, boxY + 27.5, { align: 'center' });
-    const nameWidth = doc.getTextWidth(preparedByName);
-    doc.setLineWidth(0.2);
-    doc.line(col2Center - nameWidth / 2, boxY + 28, col2Center + nameWidth / 2, boxY + 28);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Description', leftColX, descY);
+    doc.text(':', leftColonX, descY);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text(preparedDateStr, col2Center, boxY + 32, { align: 'center' });
+    doc.setFontSize(8);
+    doc.setTextColor(20, 20, 20);
+    doc.text(descLines, leftValX, descY);
+  };
 
-    // Column 3: Checked By
-    const col3Center = x3 + col3W / 2;
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(8.5);
-    doc.text('Checked By', col3Center, boxY + 4.5, { align: 'center' });
+  // -------------------------------------------------------------
+  // FUNCTION TO DRAW DYNAMIC SIGNATURE FOOTER BOX
+  // -------------------------------------------------------------
+  const drawSignatureFooter = () => {
+    const sigBoxY = 252;
+    const sigBoxHeight = 32;
+    const numCols = sigList.length;
+    const sigColWidth = contentWidth / numCols;
 
-    if (isCheckedApproved) {
-      if (checkedQrUrl) {
-        const qrSize = 17;
-        const qrX = col3Center - qrSize / 2;
-        doc.addImage(checkedQrUrl, 'PNG', qrX, boxY + 6.5, qrSize, qrSize);
-      }
-      doc.setFont('helvetica', 'bolditalic');
-      doc.setFontSize(7.5);
-      doc.text(checkedName, col3Center, boxY + 27.5, { align: 'center' });
-      const cNameW = doc.getTextWidth(checkedName);
-      doc.setLineWidth(0.2);
-      doc.line(col3Center - cNameW / 2, boxY + 28, col3Center + cNameW / 2, boxY + 28);
+    // Outer rectangle
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.rect(marginLeft, sigBoxY, contentWidth, sigBoxHeight);
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
-      doc.text(checkedDateStr, col3Center, boxY + 32, { align: 'center' });
-    } else if (isCheckedRejected) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
-      doc.setTextColor(220, 38, 38);
-      doc.text('REJECTED', col3Center, boxY + 20, { align: 'center' });
-      doc.setTextColor(0, 0, 0);
-    } else {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(60, 60, 60);
-      doc.text('PENDING', col3Center, boxY + 20, { align: 'center' });
-      doc.setTextColor(0, 0, 0);
+    // Vertical dividers between columns
+    for (let i = 1; i < numCols; i++) {
+      const divX = marginLeft + i * sigColWidth;
+      doc.line(divX, sigBoxY, divX, sigBoxY + sigBoxHeight);
     }
 
-    // Column 4: Approved by
-    const col4Center = x4 + col4W / 2;
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(8.5);
-    doc.text('Approved by', col4Center, boxY + 4.5, { align: 'center' });
+    // Render each column
+    sigList.forEach((col, idx) => {
+      const colLeft = marginLeft + idx * sigColWidth;
+      const centerX = colLeft + sigColWidth / 2;
 
-    if (isAppApproved) {
-      if (approvedQrUrl) {
-        const qrSize = 17;
-        const qrX = col4Center - qrSize / 2;
-        doc.addImage(approvedQrUrl, 'PNG', qrX, boxY + 6.5, qrSize, qrSize);
+      // 1. Column Title (Prepared by, Checked By, Approved By, Legalized By, etc.)
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+      doc.text(col.title, centerX, sigBoxY + 4.5, { align: 'center' });
+
+      // 2. Middle area: QR code OR Status text (PENDING / REJECTED)
+      if (col.qrUrl) {
+        const qrSize = 14.5;
+        const qrX = centerX - qrSize / 2;
+        const qrY = sigBoxY + 6;
+        doc.addImage(col.qrUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+      } else if (col.status === 'RE') {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(220, 38, 38);
+        doc.text('REJECTED', centerX, sigBoxY + 15, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+      } else {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(110, 110, 110);
+        doc.text('PENDING', centerX, sigBoxY + 15, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
       }
+
+      // 3. Signer Name (Bold italic, underlined)
       doc.setFont('helvetica', 'bolditalic');
       doc.setFontSize(7.5);
-      doc.text(approvedName, col4Center, boxY + 27.5, { align: 'center' });
-      const aNameW = doc.getTextWidth(approvedName);
-      doc.setLineWidth(0.2);
-      doc.line(col4Center - aNameW / 2, boxY + 28, col4Center + aNameW / 2, boxY + 28);
+      doc.setTextColor(0, 0, 0);
+      const nameY = sigBoxY + 24.5;
+      doc.text(col.signerName, centerX, nameY, { align: 'center' });
 
+      const nameWidth = Math.min(doc.getTextWidth(col.signerName), sigColWidth - 4);
+      doc.setLineWidth(0.2);
+      doc.line(centerX - nameWidth / 2, nameY + 0.8, centerX + nameWidth / 2, nameY + 0.8);
+
+      // 4. Date text below name
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
-      doc.text(approvedDateStr, col4Center, boxY + 32, { align: 'center' });
-    } else if (isAppRejected) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
-      doc.setTextColor(220, 38, 38);
-      doc.text('REJECTED', col4Center, boxY + 20, { align: 'center' });
-      doc.setTextColor(0, 0, 0);
-    } else {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(60, 60, 60);
-      doc.text('PENDING', col4Center, boxY + 20, { align: 'center' });
-      doc.setTextColor(0, 0, 0);
-    }
+      doc.setTextColor(50, 50, 50);
+      if (col.dateText) {
+        doc.text(col.dateText, centerX, sigBoxY + 29.5, { align: 'center' });
+      }
+    });
   };
 
   // -------------------------------------------------------------
@@ -450,12 +547,12 @@ export const generateRequisitionPdf = async (requisition = {}, lines = [], optio
   });
 
   callAutoTable(doc, {
-    startY: boxY + boxHeight + 4, // 74mm
+    startY: boxY + boxHeight + 3.5,
     margin: {
-      top: boxY + boxHeight + 4,  // 74mm on EVERY page
+      top: boxY + boxHeight + 3.5,
       left: marginLeft,
       right: 210 - marginRight,
-      bottom: 12,
+      bottom: 46, // Space reserved at bottom to avoid overlapping footer signature box
     },
     tableWidth: contentWidth,
     showHead: 'everyPage', // Repeat table column headers on every page
@@ -526,28 +623,7 @@ export const generateRequisitionPdf = async (requisition = {}, lines = [], optio
   });
 
   // -------------------------------------------------------------
-  // NOTE SECTION
-  // -------------------------------------------------------------
-  let finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 6 : boxY + boxHeight + 20;
-  if (finalY > 265) {
-    doc.addPage();
-    finalY = boxY + boxHeight + 6; // Start below header area on new page
-  }
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.setTextColor(0, 0, 0);
-  doc.text('Note :', marginLeft, finalY);
-
-  const noteContent = requisition.description || options.description || '-';
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(30, 30, 30);
-  const noteLines = doc.splitTextToSize(noteContent, contentWidth);
-  doc.text(noteLines, marginLeft, finalY + 4.5);
-
-  // -------------------------------------------------------------
-  // DRAW HEADER & FOOTER ON EVERY PAGE
+  // DRAW HEADER, FOOTER SIGNATURES & RUNNING FOOTER ON EVERY PAGE
   // -------------------------------------------------------------
   const totalPages = doc.getNumberOfPages();
   const printoutTimestamp = formatPrintDateTime(new Date());
@@ -555,8 +631,13 @@ export const generateRequisitionPdf = async (requisition = {}, lines = [], optio
   for (let page = 1; page <= totalPages; page++) {
     doc.setPage(page);
     
-    // Draw Voucher Header
+    // Draw Voucher Header (Company logo, title, metadata & description)
     drawPageHeader(page, totalPages);
+
+    // Draw Dynamic Signature Box in footer on the last page
+    if (page === totalPages) {
+      drawSignatureFooter();
+    }
 
     // Draw Voucher Footer (y = 290mm)
     const footerY = 290;
