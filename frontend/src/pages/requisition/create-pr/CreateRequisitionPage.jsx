@@ -626,8 +626,6 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
         setCostCenterId(header.cost_center_id || '');
         setCustomerId(header.c_bpartner_id || '');
         setPeriodId(header.c_period_id || '');
-        setCheckedById(header.adw_ad_user_checked_id || '');
-        setApprovedById(header.adw_ad_user_approved_id || '');
         setDescription(header.description || '');
       }
     }
@@ -1097,8 +1095,6 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
         description: description.trim(),
         c_bpartner_id: customerId ? Number(customerId) : null,
         c_period_id: periodId ? Number(periodId) : null,
-        adw_ad_user_checked_id: checkedById ? Number(checkedById) : null,
-        adw_ad_user_approved_id: approvedById ? Number(approvedById) : null,
       };
 
       if (isNew) {
@@ -1173,8 +1169,6 @@ export default function CreateRequisitionPage({ documentIdParam: propDocId }) {
         description: description.trim(),
         c_bpartner_id: customerId ? Number(customerId) : null,
         c_period_id: periodId ? Number(periodId) : null,
-        adw_ad_user_checked_id: checkedById ? Number(checkedById) : null,
-        adw_ad_user_approved_id: approvedById ? Number(approvedById) : null,
       };
 
       if (isNew) {

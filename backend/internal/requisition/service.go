@@ -237,15 +237,15 @@ func (s *Service) GetRequisitionDetail(requisitionID int) (*RequisitionDetail, e
 			COALESCE(pl.name, '') as pricelist_name,
 			COALESCE(pl.priceprecision, 2) as pricelist_precision,
 			COALESCE(r.priorityrule, '5') as priority_rule,
-			r.adw_ad_user_checked_id as adw_ad_user_checked_id,
-			COALESCE(u_chk.name, '') as checked_by_name,
-			r.adw_ad_user_approved_id as adw_ad_user_approved_id,
-			COALESCE(u_app.name, '') as approved_by_name,
+			CAST(NULL AS numeric) as adw_ad_user_checked_id,
+			'' as checked_by_name,
+			CAST(NULL AS numeric) as adw_ad_user_approved_id,
+			'' as approved_by_name,
 			r.created as created_at,
 			COALESCE(cc.value, '') as cost_center_value,
-			COALESCE(r.adw_checked_isapproved, '') as checked_isapproved,
-			r.adw_checked_date as checked_date,
-			COALESCE(r.adw_approve_isapproved, '') as approved_isapproved,
+			'' as checked_isapproved,
+			CAST(NULL AS timestamp) as checked_date,
+			'' as approved_isapproved,
 			(SELECT s.updated 
 			 FROM adw_requisitionauthorizerstatus s 
 			 WHERE s.m_requisition_id = r.m_requisition_id 
@@ -261,8 +261,6 @@ func (s *Service) GetRequisitionDetail(requisitionID int) (*RequisitionDetail, e
 		LEFT JOIN c_bpartner bp ON bp.c_bpartner_id = r.c_bpartner_id
 		LEFT JOIN c_period per ON per.c_period_id = r.c_period_id
 		LEFT JOIN m_pricelist pl ON pl.m_pricelist_id = r.m_pricelist_id
-		LEFT JOIN ad_user u_chk ON u_chk.ad_user_id = r.adw_ad_user_checked_id
-		LEFT JOIN ad_user u_app ON u_app.ad_user_id = r.adw_ad_user_approved_id
 		WHERE r.m_requisition_id = ?
 	`
 	if err := s.db.DB.Raw(headerSQL, requisitionID).Scan(&detail.Header).Error; err != nil {
@@ -565,12 +563,6 @@ func (s *Service) CreateRequisition(token string, clientID int, userID int, req 
 	if req.CPeriodID != nil && *req.CPeriodID > 0 {
 		payload["C_Period_ID"] = *req.CPeriodID
 	}
-	if req.CheckedByID != nil && *req.CheckedByID > 0 {
-		payload["ADW_AD_User_Checked_ID"] = *req.CheckedByID
-	}
-	if req.ApprovedByID != nil && *req.ApprovedByID > 0 {
-		payload["ADW_AD_User_Approved_ID"] = *req.ApprovedByID
-	}
 
 	res, err := s.idempiereClient.PostModel(token, "m_requisition", payload)
 	if err != nil {
@@ -769,12 +761,6 @@ func (s *Service) UpdateRequisition(token string, requisitionID int, req CreateR
 	}
 	if req.CPeriodID != nil && *req.CPeriodID > 0 {
 		payload["C_Period_ID"] = *req.CPeriodID
-	}
-	if req.CheckedByID != nil && *req.CheckedByID > 0 {
-		payload["ADW_AD_User_Checked_ID"] = *req.CheckedByID
-	}
-	if req.ApprovedByID != nil && *req.ApprovedByID > 0 {
-		payload["ADW_AD_User_Approved_ID"] = *req.ApprovedByID
 	}
 
 	res, err := s.idempiereClient.PutModel(token, "m_requisition", requisitionID, payload)
