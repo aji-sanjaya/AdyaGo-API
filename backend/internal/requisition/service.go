@@ -246,7 +246,12 @@ func (s *Service) GetRequisitionDetail(requisitionID int) (*RequisitionDetail, e
 			COALESCE(r.adw_checked_isapproved, '') as checked_isapproved,
 			r.adw_checked_date as checked_date,
 			COALESCE(r.adw_approve_isapproved, '') as approved_isapproved,
-			r.adw_approved_date as approved_date
+			(SELECT s.updated 
+			 FROM adw_requisitionauthorizerstatus s 
+			 WHERE s.m_requisition_id = r.m_requisition_id 
+			   AND s.approvaldocstatus IN ('AP', 'CO')
+			 ORDER BY s.sequence DESC, s.updated DESC 
+			 LIMIT 1) as approved_date
 		FROM m_requisition r
 		LEFT JOIN ad_org o ON o.ad_org_id = r.ad_org_id
 		LEFT JOIN m_warehouse w ON w.m_warehouse_id = r.m_warehouse_id
