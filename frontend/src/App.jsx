@@ -16,6 +16,7 @@ import CreatePrPage from './pages/requisition/create-pr/CreatePrPage';
 import CreateRequisitionPage from './pages/requisition/create-pr/CreateRequisitionPage';
 import CreatePoPage from './pages/order/create-po/CreatePoPage';
 import CreatePurchaseOrderPage from './pages/order/create-po/CreatePurchaseOrderPage';
+import ConversationAIPage from './pages/conversation-ai/ConversationAIPage';
 
 function RequisitionIndexDispatcher() {
   const [searchParams] = useSearchParams();
@@ -46,7 +47,8 @@ function AppContent() {
   const isModulePage =
     location.pathname.includes('-dashboard') ||
     location.pathname.startsWith('/create-pr') ||
-    location.pathname.startsWith('/create-po');
+    location.pathname.startsWith('/create-po') ||
+    location.pathname.startsWith('/conversation-ai');
 
   if (isModulePage) {
     return (
@@ -114,6 +116,14 @@ function AppContent() {
             element={
               <ProtectedRoute>
                 <CreatePurchaseOrderPage key="new" documentIdParam="new" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/conversation-ai"
+            element={
+              <ProtectedRoute>
+                <ConversationAIPage />
               </ProtectedRoute>
             }
           />

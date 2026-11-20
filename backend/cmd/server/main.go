@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"factoryhub-go/config"
+	"factoryhub-go/internal/ai"
 	"factoryhub-go/internal/auth"
 	"factoryhub-go/internal/dashboard"
 	"factoryhub-go/internal/database"
@@ -68,6 +69,12 @@ func main() {
 	notifService := notification.NewService(dbInstance)
 	notifHandler := notification.NewHandler(notifService)
 
+	// Initialize AI Chat module
+	ollamaClient := ai.NewOllamaClient("qwen3.5:4b")
+	toolRegistry := ai.NewToolRegistry(dbInstance)
+	aiService := ai.NewService(ollamaClient, toolRegistry)
+	aiHandler := ai.NewHandler(aiService)
+
 	// Setup Gin router
 	r := gin.Default()
 
@@ -106,6 +113,7 @@ func main() {
 		reqHandler.RegisterRoutes(protected)
 		orderHandler.RegisterRoutes(protected)
 		notifHandler.RegisterRoutes(protected)
+		aiHandler.RegisterRoutes(protected)
 	}
 
 	// Graceful server startup
