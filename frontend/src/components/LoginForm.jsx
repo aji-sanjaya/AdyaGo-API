@@ -68,7 +68,7 @@ export default function LoginForm({ onSubmit, onLoginSuccess, isLoading, error, 
 
       {/* Main Glassmorphism High-Tech Card */}
       <div
-        className={`relative backdrop-blur-2xl rounded-3xl border transition-all duration-300 p-8 sm:p-10 overflow-hidden ${isDark
+        className={`relative backdrop-blur-2xl rounded-3xl border transition-all duration-300 p-8 sm:p-10 ${isDark
           ? 'bg-slate-900/80 border-slate-800/80 shadow-[0_20px_50px_rgba(8,11,20,0.8)]'
           : 'bg-white/95 border-slate-200/90 shadow-[0_20px_50px_rgba(99,102,241,0.12)]'
           }`}
